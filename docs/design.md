@@ -846,7 +846,7 @@ Mitigation:
 
 # 16. Implemented Baseline
 
-The MVP and post-MVP phases through phase 22 are implemented.
+The MVP and the patch-capable local runner are implemented.
 
 NightShift currently provides:
 
@@ -857,14 +857,24 @@ NightShift currently provides:
 * `nightshift run --task TASK-ID` for a specific task
 * `nightshift run --all` for sequential multi-task execution
 * `nightshift web` for a read-only artifact dashboard
+* Operational run logging to the CLI, per-run logs, and aggregate logs
 * Markdown task parsing with descriptions, acceptance criteria, completion state, and dependency bullets
 * Dependency validation for missing references and simple cycles
 * Dependency-aware task selection and task blocking
 * Declarative YAML pipeline execution
-* Command, agent, agent-review, review, and summarize stage handling
+* Command, agent, agent-review, review, summarize, repo-context, code-writer, patch-normalizer, patch-validator, and patch-apply stage handling
 * Retry redirection with a configured task retry limit
 * Command-backed agents
 * Ollama-backed local model agents
+* OpenAI-compatible local/server model agents
+* Per-agent temperature settings
+* Scoped repo lookup tools: `list_files`, `read_file`, and `grep`
+* Planner lookup requests, `files-inspected.md`, and planner reruns with retrieved context
+* Project context chart generation
+* Context pack generation
+* Unified diff code-writing contract
+* Patch normalization, validation, dry-run, and apply modes
+* Test/static failure repair loops via bounded stage retries
 * Prompt bundle construction with project, task, retry, and previous-stage context
 * Prompt snapshots and run metadata for experiment comparison
 * Optional experiment labels and prompt variant metadata
@@ -881,8 +891,8 @@ NightShift currently provides:
 * Per-run and per-task markdown/text artifacts
 * Project, task, retry, and context-out files
 * Final task notes, stage summaries, task completion artifacts, and run summaries
-* Documentation for config, artifact review, troubleshooting, and quickstart workflows
-* A complete fake-agent quickstart Lisp example under `examples/quickstart-lisp/`
+* Documentation for config, artifact review, troubleshooting, quickstart, and patch workflows
+* A complete fake-agent patch-mode quickstart Lisp example under `examples/quickstart-lisp/`
 
 The system remains sequential and local-first. It is designed to produce reviewable artifacts and repository state, not to deploy, push, or autonomously ship changes.
 
@@ -929,7 +939,13 @@ Current run artifacts include:
           task.md
           context.md
           plan.md
-          implementation-log.md
+          files-inspected.md
+          context-pack.md
+          proposed.patch
+          normalized.patch
+          patch-validation.md
+          applied.patch
+          patch-apply-output.txt
           test-output.txt
           review.md
           stage-results.md
@@ -969,144 +985,51 @@ Current limitations:
 
 * Execution is sequential; there is no parallel task runner.
 * The web dashboard is read-only and artifact-oriented.
-* Live run progress is limited to basic CLI prints and artifact inspection.
 * Flask is optional; `nightshift web` requires it to be installed.
-* Ollama support depends on the user's local Ollama installation and model availability.
+* Model backends depend on the user's local model server, Ollama installation, or command wrappers.
 * Git artifacts can be unavailable or degraded in non-git repositories or repositories blocked by Git safe-directory rules.
 * Task mutation is intentionally minimal and only flips matching checklist lines.
-* Command configuration is safer than the MVP but is still string-first for compatibility.
+* Patch application currently uses `git apply`; non-git workflows are limited.
+* Command configuration remains string-first for compatibility.
 * There is no branch isolation, resumable run state machine, approval workflow, or deployment integration.
 
 ---
 
-# 18. Next Major Update Plan
+# 18. Active Roadmap
 
-The next major update should improve operational visibility while preserving the current artifact-first model.
+Completed phase checklists are removed from this design document once they are reflected in the implemented baseline and user-facing docs. Track future phase work here only while it is active, using concise implementation notes when a decision needs durable context.
 
-Phase work is tracked in this design document by updating the relevant phase checklist and adding concise implementation notes only when a decision needs durable context. The old `docs/devlog/` phase files have been retired.
+The next important additions are:
 
-## Phase 23: Improved Logging and Live Visibility
+1. Branch isolation for patch runs
+   Run each task on a dedicated branch or worktree, record branch metadata, and make rollback/review safer.
 
-NightShift should make active runs easier to observe from both the CLI and the web dashboard.
+2. Resumable run state
+   Persist machine-readable run state so interrupted runs can continue from the last completed stage instead of restarting.
 
-Implementation tasks:
+3. Human approval gates
+   Add optional approval stages before patch apply, after failed validation, or before task completion.
 
-* [x] Add a small logging module with structured operational events.
-* [x] Stream human-readable progress to the CLI during `run` and `run --all`.
-* [x] Include run id, task id, stage id, agent/backend, command index, retry count, status, duration, and artifact path where available.
-* [x] Write a per-run log file such as `.nightshift/runs/<run-id>/run.log`.
-* [x] Optionally write or rotate an aggregate `.nightshift/nightshift.log` for cross-run troubleshooting.
-* [x] Keep logs operational; do not duplicate full prompts, full model responses, or full command output that already lives in artifacts.
-* [x] Redact or avoid secrets from logged environment/config values.
-* [x] Add dashboard support for viewing the latest log tail.
-* [x] Cap the dashboard log view to the last 100 lines by default.
-* [x] Keep the full per-run log file available as an artifact unless a later size cap is configured.
-* [x] Auto-refresh the dashboard log view with the existing dashboard refresh model.
-* [x] Add tests for log writing, CLI progress hooks, dashboard log rendering, missing log files, and the 100-line cap.
+4. Structured patch policy config
+   Move max files, max lines, forbidden paths, allowed file types, binary rejection, and protected files into a reusable project-level write policy.
 
-Acceptance Criteria:
+5. Better model backend support
+   Expand OpenAI-compatible behavior, add request metadata artifacts, support response format hints, and document local server patterns.
 
-* A user running NightShift from a terminal can tell which task and stage are active.
-* Long Ollama or command stages show enough lifecycle information that the process does not appear hung.
-* The latest run log is visible from `nightshift web`.
-* The web client displays at most the last 100 log lines by default.
-* Logs point users to detailed artifacts instead of replacing them.
-* Missing or partial log files do not crash the dashboard.
+6. Richer dashboard
+   Add task/stage navigation, patch views, validation status, run log tail, and artifact links without adding mutation controls.
 
-Notes:
+7. Project context chart improvements
+   Use language-aware parsers where available, include import graphs, ownership hints, and stale-context detection.
 
-* This phase should not add process control, websockets, authentication, or write actions to the web client.
-* If future live streaming is needed, the first version can still use file tailing plus refresh before introducing websockets.
-* Operational logs should complement artifacts: artifacts remain the source of detailed prompts, responses, command output, diffs, and summaries.
+8. Stronger repair feedback
+   Feed compact test/static failure summaries, patch apply errors, and reviewer objections into repair attempts with clearer bounded policies.
 
-## Phase 24: Per-Agent Model Parameters
+9. End-to-end apply-mode examples
+   Add more small target projects and fake-agent fixtures that exercise patch apply, repair, validation failure, and review retry paths.
 
-- [x] Add `temperature` to agent config.
-- [x] Pass temperature to Ollama/OpenAI-compatible backends.
-- [x] Default safely if omitted.
-- [x] Add config validation tests.
-
-## Phase 25: Repo Lookup Tools MVP
-
-- [x] Add tool interface for repo operations.
-- [x] Implement scoped `list_files`.
-- [x] Implement scoped `read_file`.
-- [x] Implement scoped `grep`.
-- [x] Enforce existing path safety rules.
-- [x] Log tool calls as artifacts.
-
-## Phase 26: Planner Code-Discovery Support
-
-- [x] Teach planner prompt to request needed code context.
-- [x] Add structured planner output for lookup requests.
-- [x] Execute requested lookup tools.
-- [x] Save `files-inspected.md`.
-- [x] Re-run planner with retrieved context.
-
-## Phase 27: Context Pack Builder
-
-- [x] Add `repo_context` stage.
-- [x] Generate `context-pack.md`.
-- [x] Include task, acceptance criteria, relevant files, snippets, and constraints.
-- [x] Add line-numbered excerpts.
-- [x] Add context-size caps.
-
-## Phase 28: Project Context Chart MVP
-
-- [x] Generate `.nightshift/project-context-chart.md`.
-- [x] Include files, responsibilities, functions/classes, entry points, tests.
-- [x] Use simple regex/parser MVP.
-- [x] Update chart during planning.
-- [x] Store anchors/line numbers/search terms.
-
-## Phase 29: Code Writer Stage
-
-- [x] Add `code_writer` stage type.
-- [x] Feed it task + context pack.
-- [x] Require unified diff output.
-- [x] Save `proposed.patch`.
-- [x] Save `implementation-summary.md`.
-
-## Phase 30: Patch Normalization
-
-- [x] Add `patch_normalizer` stage.
-- [x] Support low-temperature formatter model.
-- [x] Convert messy model output to valid unified diff.
-- [x] Reject missing/ambiguous edits.
-- [x] Save `normalized.patch`.
-
-## Phase 31: Patch Validation
-
-- [x] Parse unified diffs.
-- [x] Reject malformed patches.
-- [x] Enforce scoped paths.
-- [x] Reject path traversal.
-- [x] Enforce max files/max lines changed.
-- [x] Reject forbidden files.
-
-## Phase 32: Patch Apply / Dry Run
-
-- [x] Add `patch_apply` stage.
-- [x] Support `mode: dry_run`.
-- [x] Support `mode: apply`.
-- [x] Save `applied.patch`.
-- [x] Preserve pre/post git status.
-- [x] Fail cleanly on apply errors.
-
-## Phase 33: Test Feedback Repair Loop
-
-- [x] Feed test/static failure output back into implementer.
-- [x] Add bounded repair attempts.
-- [x] Save each repair patch.
-- [x] Save repair summaries.
-- [x] Stop after max retry count.
-
-## Phase 34: End-to-End Coding Quickstart
-
-- [x] Update quickstart to modify real code.
-- [x] Include fake-agent test fixture.
-- [x] Demonstrate lookup → context pack → patch → apply → test.
-- [x] Document dry-run vs apply mode.
+10. Packaging and dependency extras
+   Add optional extras such as `nightshift[web]`, document supported Python versions, and prepare the project for repeatable installation.
 ---
 
 # Appendix A: Design Decisions and Rationale

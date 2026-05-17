@@ -4,26 +4,31 @@
   <img src="docs/images/logo.png" width="220">
 </p>
 
-
 Auditable local-first AI coding pipelines.
 
-NightShift is a deterministic pipeline runner for long-running AI-assisted coding workflows. It runs one markdown task at a time through a declarative YAML pipeline, records the important artifacts, and leaves the user with a reviewable work package.
+NightShift is a deterministic pipeline runner for AI-assisted coding work. It reads markdown tasks, builds bounded context, asks configured agents for plans or patches, validates and applies those patches through explicit stages, runs checks, and leaves a human-reviewable artifact trail.
 
 NightShift is not an autonomous software engineer. It is an orchestration layer that treats AI agents as unreliable workers inside bounded, testable, auditable workflows.
 
-## MVP Status
+## Current Status
 
-The core MVP is implemented:
+NightShift now supports the full local patch workflow:
 
-- `nightshift init` creates starter config, task, and agent prompt files.
-- `nightshift validate` checks config structure, prompt paths, task parsing, scoped paths, and command safety.
-- `nightshift run` executes the next incomplete task.
-- `nightshift run --task TASK-001` executes a specific task.
-- Command-backed agents receive compact prompt bundles on stdin.
-- Ollama-backed agents can call local models with `backend: ollama`.
-- Command stages run through allowlist and forbidden-fragment checks.
-- Runs create `.nightshift/` artifacts, task context, retry context, command output, agent output, final notes, and run summaries.
-- Unit tests cover config, safety, tasks, artifacts, commands, agents, pipeline retries, context, and reports.
+- `nightshift init`, `validate`, `status`, `run`, `run --task`, `run --all`, and `web`.
+- Markdown task parsing with dependencies.
+- Command, Ollama, and OpenAI-compatible agent backends.
+- Per-agent model settings such as `temperature`.
+- Repo lookup tools: scoped `list_files`, `read_file`, and `grep`.
+- Planner lookup requests with `files-inspected.md` artifacts.
+- `repo_context` stage for `context-pack.md`.
+- Project context chart generation at `.nightshift/project-context-chart.md`.
+- `code_writer` stage that requires unified diff output.
+- `patch_normalizer`, `patch_validator`, and `patch_apply` stages.
+- Patch dry-run and apply modes.
+- Test/static failure repair loops through existing retry routing.
+- Run logs, dashboard log tails, git status artifacts, diffs, stage summaries, and final reports.
+
+The default posture remains local-first and review-first: agents propose; NightShift validates, applies, tests, and records.
 
 ## What NightShift Is
 
@@ -32,10 +37,11 @@ NightShift is built for reviewable automation:
 - local-first execution
 - declarative pipeline stages
 - markdown task files
-- command-backed agent wrappers
+- command-backed and model-backed agent wrappers
 - explicit retry limits
+- scoped repository lookup
+- patch validation before mutation
 - command allowlists
-- scoped path checks
 - durable markdown/text artifacts
 - compact context handoff
 - final reports for human review
@@ -44,7 +50,7 @@ The goal is to wake up to useful artifacts and a repository state you can inspec
 
 ## What NightShift Is Not
 
-NightShift does not try to autonomously ship code. It does not push branches, deploy software, run arbitrary hooks, execute parallel task swarms, or grant agents unlimited repository access. Human review remains the final authority.
+NightShift does not push branches, deploy software, run unbounded task swarms, or grant agents unlimited repository access. Human review remains the final authority.
 
 ## Install
 
@@ -60,38 +66,37 @@ You can also run the CLI module directly from a checkout:
 python -m nightshift.cli --help
 ```
 
-NightShift currently uses the Python standard library for runtime behavior. PyYAML is used automatically if installed, but the starter config works with the built-in YAML subset parser.
+NightShift uses the Python standard library for runtime behavior where practical. PyYAML is used automatically if installed, but starter configs work with the built-in YAML subset parser.
 
 ## Quickstart
 
-Create starter files:
+Validate the included end-to-end patch example:
+
+```bash
+python -m nightshift.cli validate --config examples/quickstart-lisp/nightshift.yaml
+```
+
+Run the first task against a copy of the example project. The pipeline uses `patch_apply mode: apply`, so running it directly against `examples/quickstart-lisp/` will modify those files.
+
+```bash
+cp -r examples/quickstart-lisp /tmp/nightshift-quickstart
+python -m nightshift.cli run --config /tmp/nightshift-quickstart/nightshift.yaml --task TASK-001
+```
+
+For a new project:
 
 ```bash
 nightshift init
-```
-
-Validate the project:
-
-```bash
 nightshift validate
-```
-
-Run the next incomplete task:
-
-```bash
-nightshift run
-```
-
-Run a specific task:
-
-```bash
+nightshift status
 nightshift run --task TASK-001
 ```
 
-Review artifacts:
+Open the read-only artifact dashboard:
 
-```text
-.nightshift/runs/<run-id>/
+```bash
+pip install flask
+nightshift web
 ```
 
 ## Task File Example
@@ -101,113 +106,105 @@ Tasks live in markdown checklist format:
 ```markdown
 # Tasks
 
-- [ ] TASK-001: Add YAML config loading
+- [ ] TASK-001: Add parser support
 
 Description:
-Implement config loading for NightShift.
+Implement parsing for the target language.
 
 Acceptance Criteria:
-- Loads `nightshift.yaml`
-- Validates required fields
-- Returns typed config objects
-- Includes tests
+- Parses numbers
+- Parses symbols
+- Parses nested lists
+- Includes unit tests
 ```
 
-NightShift parses task id, title, completion state, description, acceptance criteria, optional dependency bullets, and raw task markdown.
+NightShift parses task id, title, completion state, description, acceptance criteria, dependency bullets, and raw task markdown.
 
-## Config Example
+## Pipeline Example
 
 ```yaml
-project:
-  name: example-project
-  root: .
-  task_file: tasks.md
-  artifact_dir: .nightshift
-
-safety:
-  require_clean_worktree: false
-  scoped_paths:
-    - .
-  allowed_commands:
-    - python -m unittest
-  forbidden_commands:
-    - rm -rf
-    - git push
-    - curl | bash
-
-agents:
-  planner:
-    backend: command
-    command: echo
-    system_prompt: agents/planner.md
-
-  implementer:
-    backend: command
-    command: echo
-    system_prompt: agents/implementer.md
-
-  reviewer:
-    backend: command
-    command: echo
-    system_prompt: agents/reviewer.md
-
 pipeline:
-  max_task_retries: 3
+  max_task_retries: 2
+  continue_on_task_failure: false
   stages:
     - id: plan
       type: agent
       agent: planner
       output: plan.md
 
+    - id: context
+      type: repo_context
+      output: context-pack.md
+
     - id: implement
-      type: agent
+      type: code_writer
       agent: implementer
-      output: implementation-log.md
+      output: proposed.patch
+
+    - id: normalize
+      type: patch_normalizer
+      output: normalized.patch
+
+    - id: validate_patch
+      type: patch_validator
+      output: patch-validation.md
+      max_files: 8
+      max_lines: 800
+
+    - id: apply_patch
+      type: patch_apply
+      mode: apply
+      output: patch-apply-output.txt
 
     - id: test
       type: command
       commands:
-        - python -m unittest
+        - python -m unittest discover -v
       output: test-output.txt
+      on_fail: implement
 
     - id: review
       type: agent_review
       agent: reviewer
       on_fail: implement
       output: review.md
-
-    - id: summarize
-      type: summarize
-      output: final-notes.md
 ```
+
+Use `mode: dry_run` for patch applicability checks without modifying files. Use `mode: apply` to write the validated patch to the target project.
 
 ## Agent Backends
 
-NightShift supports `backend: command` and `backend: ollama`.
+NightShift supports:
 
-NightShift builds a prompt bundle containing:
+- `backend: command`
+- `backend: ollama`
+- `backend: openai_compatible`
 
-- system prompt
-- stage id and type
-- task markdown
-- acceptance criteria
-- project context
-- task context
-- previous stage output
-- retry notes
-- output contract
-
-The prompt is passed to the configured command or local Ollama model on stdin. stdout, stderr, exit code, duration, and the prompt are persisted as artifacts.
-
-Ollama example:
+Example Ollama agent:
 
 ```yaml
 agents:
-  planner:
+  implementer:
     backend: ollama
     model: qwen2.5-coder:14b
-    system_prompt: agents/planner.md
+    temperature: 0.2
+    system_prompt: agents/implementer.md
 ```
+
+Example OpenAI-compatible agent:
+
+```yaml
+agents:
+  implementer:
+    backend: openai_compatible
+    model: local-model
+    base_url: http://localhost:11434/v1
+    api_key_env: OPENAI_API_KEY
+    temperature: 0.2
+    system_prompt: agents/implementer.md
+```
+
+NightShift passes prompt bundles to agents and persists stdout, stderr, exit code, duration, and prompt artifacts. Code writer agents should return unified diffs.
 
 Review agents should emit:
 
@@ -220,14 +217,14 @@ context_update: <compact useful note>
 
 ## Safety Model
 
-NightShift validates paths and commands before execution.
+NightShift validates paths, commands, and patches before mutation.
 
 Path safety:
 
 - project roots are resolved with `pathlib`
-- task files and prompt files must stay inside the project root
+- task and prompt files must stay inside the project root
 - artifact paths cannot escape `.nightshift/`
-- task artifact writes cannot escape the task directory
+- repo lookup tools are constrained by `safety.scoped_paths`
 
 Command safety:
 
@@ -236,7 +233,13 @@ Command safety:
 - command output and exit codes are recorded
 - command stages stop at the first failing or timed-out command
 
-The MVP does not push, deploy, create branches, or execute arbitrary Python hooks.
+Patch safety:
+
+- code changes are represented as unified diffs
+- patches are normalized and validated before apply
+- path traversal and forbidden paths are rejected
+- scoped paths, max files, and max changed lines are enforced
+- `patch_apply` records apply output and git status artifacts
 
 ## Artifact Layout
 
@@ -245,24 +248,38 @@ A run creates human-readable artifacts:
 ```text
 .nightshift/
   project-context.md
+  project-context-chart.md
+  nightshift.log
   runs/
     <run-id>/
+      run.log
       run-summary.md
       config.snapshot.yaml
+      run-metadata.md
+      prompts/
+        <agent-id>.md
       tasks/
         TASK-001/
           task.md
           context.md
+          files-inspected.md
+          context-pack.md
           plan.md
-          implementation-log.md
+          proposed.patch
+          normalized.patch
+          patch-validation.md
+          applied.patch
+          patch-apply-output.txt
           test-output.txt
           review.md
           stage-results.md
           context-out.md
+          task-completion.md
+          diff.patch
           final-notes.md
 ```
 
-Artifacts are written even when a stage fails where possible.
+Exact artifact names depend on configured stage `output` values.
 
 ## Development
 
@@ -278,29 +295,14 @@ Compile-check modules:
 python -m compileall nightshift tests
 ```
 
-Optional read-only dashboard:
-
-```bash
-pip install flask
-nightshift web
-```
-
 Additional docs:
 
+- [Quickstart](QUICKSTART.md)
 - [Config reference](docs/config-reference.md)
 - [Artifact review workflow](docs/artifact-review.md)
 - [Troubleshooting](docs/troubleshooting.md)
-- [Quickstart](QUICKSTART.md)
 - [Quickstart Lisp example](examples/quickstart-lisp/)
 
 ## Roadmap
 
-Next major work:
-
-- richer local backend support beyond Ollama
-- optional branch isolation
-- live dashboard enhancements
-- stronger structured command definitions
-- longer-run reporting and resumability
-
-NightShift remains oriented around reviewable output, not blind autonomy.
+The active roadmap now lives in [docs/design.md](docs/design.md). Completed phase checklists are cleared from that document so it stays focused on the current platform shape and the next important work.
