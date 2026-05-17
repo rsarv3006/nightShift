@@ -239,7 +239,7 @@ For real models, start conservatively:
 
 ```yaml
 pipeline:
-  max_task_retries: 1
+  max_task_retries: 3
   continue_on_task_failure: false
 ```
 

@@ -191,7 +191,7 @@ def _validate_hunk_lines(patch: str) -> None:
             continue
         raise PipelineError(
             "Patch validation failed: malformed hunk line "
-            f"{line_number}; expected ' ', '+', '-', or '\\'."
+            f"{line_number}; expected a leading space, '+', '-', or backslash."
         )
 
 

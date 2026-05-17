@@ -85,7 +85,7 @@ tasks/TASK-001/final-notes.md
 
 ## Example Templates
 
-Example run files are available in `templates/`.
+Example run files are available in `examples/templates/`.
 They are safe starter examples and use command-backed fake agents.
 
 The repository also includes a complete sample target project:
@@ -148,7 +148,7 @@ agents:
     system_prompt: agents/reviewer.md
 
 pipeline:
-  max_task_retries: 1
+  max_task_retries: 3
   continue_on_task_failure: false
   stages:
     - id: plan

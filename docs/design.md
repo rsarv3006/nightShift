@@ -1014,23 +1014,36 @@ The next important additions are:
    Move max files, max lines, forbidden paths, allowed file types, binary rejection, and protected files into a reusable project-level write policy.
 
 5. Better model backend support
-   Expand OpenAI-compatible behavior, add request metadata artifacts, support response format hints, and document local server patterns.
+   Expand OpenAI-compatible behavior, add request metadata artifacts, support response format hints, and document local server patterns. Prefer non-terminal APIs for machine-readable model output. In particular, avoid relying on interactive CLI streaming paths such as `ollama run` when exact patch text matters; use the Ollama HTTP API or OpenAI-compatible endpoint so terminal rendering, spinners, and line-wrapping behavior cannot corrupt artifacts.
 
-6. Richer dashboard
+6. Deterministic diff generation
+   Reduce direct reliance on models emitting perfect unified diffs. Add a workflow where the model returns complete file contents or a structured edit description, then NightShift writes the unified diff deterministically from before/after file snapshots. Keep the existing unified-diff contract for advanced agents, but make deterministic diff generation the preferred path for smaller local models.
+
+7. Retry artifact versioning
+   Preserve per-attempt artifacts instead of overwriting fixed filenames such as `proposed.patch`, `normalized.patch`, and `patch-validation.md`. Retry artifacts should include attempt numbers, while summary artifacts can point to the latest attempt. This makes repeated validation and repair failures diagnosable.
+
+8. Patch repair stage
+   Add an explicit patch repair or strict normalizer stage that receives the invalid patch, validation error, and relevant source excerpts, then returns a complete replacement patch. This stage should remain bounded by strict validation and should not silently guess intent for arbitrary malformed hunks.
+
+9. Richer dashboard
    Add task/stage navigation, patch views, validation status, run log tail, and artifact links without adding mutation controls.
 
-7. Project context chart improvements
+10. Project context chart improvements
    Use language-aware parsers where available, include import graphs, ownership hints, and stale-context detection.
 
-8. Stronger repair feedback
+11. Stronger repair feedback
    Feed compact test/static failure summaries, patch apply errors, and reviewer objections into repair attempts with clearer bounded policies.
 
-9. End-to-end apply-mode examples
+12. End-to-end apply-mode examples
    Add more small target projects and fake-agent fixtures that exercise patch apply, repair, validation failure, and review retry paths.
 
-10. Packaging and dependency extras
+13. Packaging and dependency extras
    Add optional extras such as `nightshift[web]`, document supported Python versions, and prepare the project for repeatable installation.
----
+
+Implementation note:
+
+Recent local-model patch experiments exposed repeated line-fragment artifacts where long generated lines were split and the tail was duplicated on the following line. This affected prose and unified diffs, producing malformed hunk lines that strict validation correctly rejected. Treat this as a backend/output-capture and patch-contract problem before adding editor or linter agents: remove terminal streaming from model capture, preserve retry artifacts, and prefer deterministic diff generation when exact syntax matters.
+--- 
 
 # Appendix A: Design Decisions and Rationale
 

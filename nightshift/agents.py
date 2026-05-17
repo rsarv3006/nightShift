@@ -469,6 +469,7 @@ def output_contract_for(stage: StageConfig) -> str:
                 "Do not include prose outside the patch.",
                 "Use diff --git headers and hunk headers.",
                 "For existing files, do not use new file mode or /dev/null headers.",
+                "On repair attempts, return a complete corrected replacement diff.",
             ]
         )
     if stage.type == "patch_normalizer":
