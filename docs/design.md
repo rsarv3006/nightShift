@@ -870,6 +870,195 @@ This MVP is sufficient to:
 
 ---
 
+# 17. MVP Implementation Status
+
+The first MVP pass is implemented across phases 1 through 11.
+
+Implemented capabilities:
+
+* Project initialization
+* Config validation
+* Markdown task parsing
+* Path and command safety checks
+* Artifact storage
+* Command stage execution
+* Command-backed agent execution
+* Deterministic pipeline execution
+* Retry redirection and retry limits
+* Context file creation and prompt injection
+* Final task notes and run summaries
+* README documentation
+
+Known MVP limitations:
+
+* Only the `command` agent backend is implemented
+* `nightshift status` is still a placeholder
+* Clean worktree enforcement is not fully wired
+* Diff patch capture is not implemented
+* Task completion mutation is not implemented
+* Task dependency enforcement is not implemented
+* Multi-task overnight batching is not implemented
+
+---
+
+# 18. Next Major Update Plan
+
+The next major update should turn the single-task MVP into a more practical local runner while preserving the same safety and auditability model.
+
+## Phase 12: Status Command
+
+* [ ] Implement `nightshift status`
+* [ ] Print config path and project root
+* [ ] Print task counts
+* [ ] Print next incomplete task
+* [ ] Print latest run directory
+* [ ] Print validation warnings where useful
+* [ ] Add tests
+
+Acceptance Criteria:
+
+* User can inspect project state without running a pipeline
+* Missing or malformed inputs produce clear errors
+* Latest artifacts are discoverable from the CLI
+
+---
+
+## Phase 13: Git Safety and Diff Artifacts
+
+* [ ] Implement clean-worktree enforcement when configured
+* [ ] Capture pre-run git status
+* [ ] Capture post-run git status
+* [ ] Write `diff.patch`
+* [ ] Include changed files in final reports
+* [ ] Handle non-git repositories gracefully
+* [ ] Add tests with temporary git repositories where practical
+
+Acceptance Criteria:
+
+* `require_clean_worktree: true` blocks dirty repositories
+* Diffs are persisted after task execution
+* Reports identify modified files without requiring users to inspect every artifact
+
+---
+
+## Phase 14: Task Completion Updates
+
+* [ ] Mark completed tasks in `tasks.md`
+* [ ] Preserve task file formatting where practical
+* [ ] Avoid marking failed tasks complete
+* [ ] Record task completion decisions in artifacts
+* [ ] Add tests
+
+Acceptance Criteria:
+
+* Successful runs can mark `[ ]` tasks as `[x]`
+* Failed runs leave tasks incomplete
+* Task file updates are reviewable and minimal
+
+---
+
+## Phase 15: Multi-Task Run Mode
+
+* [ ] Add `nightshift run --all`
+* [ ] Process incomplete tasks in file order
+* [ ] Stop or continue on failure based on config
+* [ ] Create per-task artifact directories under one run
+* [ ] Generate aggregate run summary
+* [ ] Add tests
+
+Acceptance Criteria:
+
+* User can run more than one task unattended
+* Each task remains independently reviewable
+* Aggregate summary shows completed and failed tasks
+
+---
+
+## Phase 16: Dependency Handling
+
+* [ ] Parse dependency bullets into structured task dependencies
+* [ ] Block tasks whose dependencies are incomplete
+* [ ] Detect missing dependency references
+* [ ] Detect simple dependency cycles
+* [ ] Report blocked tasks in status and run summaries
+* [ ] Add tests
+
+Acceptance Criteria:
+
+* Tasks do not run before declared dependencies are complete
+* Dependency errors are clear and actionable
+* Task ordering remains deterministic
+
+---
+
+## Phase 17: Local Model Backend
+
+* [ ] Add an Ollama-compatible agent backend
+* [ ] Keep the existing command backend
+* [ ] Reuse prompt bundle construction
+* [ ] Persist request/response metadata
+* [ ] Handle model errors and timeouts
+* [ ] Add fake backend tests without requiring Ollama
+
+Acceptance Criteria:
+
+* Users can configure a local model backend for agent stages
+* Tests do not require real model calls
+* Agent artifacts remain comparable across backends
+
+---
+
+## Phase 18: Prompt and Pipeline Experiments
+
+* [ ] Add prompt variant identifiers
+* [ ] Snapshot prompt files per run
+* [ ] Record agent backend metadata
+* [ ] Add optional experiment labels to config
+* [ ] Include experiment metadata in reports
+* [ ] Add tests
+
+Acceptance Criteria:
+
+* Users can compare prompt/pipeline runs from artifacts
+* Reports show which prompts and backend settings produced a result
+* Experiment metadata does not change execution semantics
+
+---
+
+## Phase 19: Stronger Command Execution
+
+* [ ] Replace shell-string execution where possible with parsed argv execution
+* [ ] Preserve compatibility with explicit shell command stages when configured
+* [ ] Add per-command timeout config
+* [ ] Add environment variable allowlists
+* [ ] Add working-directory restrictions
+* [ ] Add tests
+
+Acceptance Criteria:
+
+* Command execution is safer by default
+* Shell execution is explicit rather than implicit
+* Command behavior remains auditable
+
+---
+
+## Phase 20: Documentation and Examples Refresh
+
+* [ ] Add complete example project
+* [ ] Add example fake-agent pipeline
+* [ ] Add example local-model pipeline
+* [ ] Document artifact review workflow
+* [ ] Document troubleshooting
+* [ ] Add config reference
+
+Acceptance Criteria:
+
+* New users can run a complete demo from a fresh checkout
+* Documentation distinguishes implemented features from planned features
+* Examples remain safe to run locally
+
+---
+
 # Appendix A: Design Decisions and Rationale
 
 ## A.1 Local-first architecture

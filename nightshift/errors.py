@@ -27,3 +27,11 @@ class ArtifactError(NightShiftError):
 
 class CommandError(NightShiftError):
     """Raised when command stage execution cannot proceed."""
+
+
+class AgentError(NightShiftError):
+    """Raised when agent execution cannot proceed."""
+
+
+class PipelineError(NightShiftError):
+    """Raised when pipeline execution cannot proceed."""

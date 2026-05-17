@@ -1,395 +1,100 @@
 # NightShift
 
-> Auditable local-first AI coding pipelines.
->
-> Wake up to reviewable work, not chaos.
+Auditable local-first AI coding pipelines.
 
-NightShift is a deterministic pipeline runner for long-running AI-assisted coding workflows.
+NightShift is a deterministic pipeline runner for long-running AI-assisted coding workflows. It runs one markdown task at a time through a declarative YAML pipeline, records the important artifacts, and leaves the user with a reviewable work package.
 
-It is designed for overnight or unattended execution against a scoped project repository using local or external coding agents.
+NightShift is not an autonomous software engineer. It is an orchestration layer that treats AI agents as unreliable workers inside bounded, testable, auditable workflows.
 
-NightShift is not an autonomous coding god.
+## MVP Status
 
-It is a safety-aware orchestration system that treats LLMs like unreliable distributed systems.
+The core MVP is implemented:
 
-Agents are bounded by:
+- `nightshift init` creates starter config, task, and agent prompt files.
+- `nightshift validate` checks config structure, prompt paths, task parsing, scoped paths, and command safety.
+- `nightshift run` executes the next incomplete task.
+- `nightshift run --task TASK-001` executes a specific task.
+- Command-backed agents receive compact prompt bundles on stdin.
+- Command stages run through allowlist and forbidden-fragment checks.
+- Runs create `.nightshift/` artifacts, task context, retry context, command output, agent output, final notes, and run summaries.
+- Unit tests cover config, safety, tasks, artifacts, commands, agents, pipeline retries, context, and reports.
 
-* scoped repository access
-* structured pipeline stages
-* tests and static analysis
-* retry limits
-* review stages
-* context compaction
-* durable artifacts
+## What NightShift Is
 
-The output is:
+NightShift is built for reviewable automation:
 
-* reviewable code
-* plans
-* logs
-* diffs
-* test output
-* review notes
-* overnight summaries
+- local-first execution
+- declarative pipeline stages
+- markdown task files
+- command-backed agent wrappers
+- explicit retry limits
+- command allowlists
+- scoped path checks
+- durable markdown/text artifacts
+- compact context handoff
+- final reports for human review
 
-Not blind autonomous shipping.
+The goal is to wake up to useful artifacts and a repository state you can inspect.
 
----
+## What NightShift Is Not
 
-# Why?
+NightShift does not try to autonomously ship code. It does not push branches, deploy software, run arbitrary hooks, execute parallel task swarms, or grant agents unlimited repository access. Human review remains the final authority.
 
-Most "AI coding agents" optimize for:
-
-* autonomy
-* demo magic
-* speed
-* vibes
-
-NightShift optimizes for:
-
-1. Cheapness
-2. Correctness
-3. Auditability
-4. Speed
-
-NightShift is also intended to serve as an experimentation platform for AI-assisted software engineering workflows.
-
-The system is intentionally designed to facilitate testing and comparison of:
-
-* different models
-* different agent roles
-* prompt structures
-* system prompts
-* retry strategies
-* review strategies
-* context compaction techniques
-* pipeline structures
-* reasoning formats
-* constraint-driven workflows
-
-The pipeline architecture should make these experiments reproducible, auditable, and configurable rather than hidden inside opaque agent behavior.
-
-The assumption is simple:
-
-> AI systems are useful but unreliable.
-
-NightShift embraces this reality by building deterministic orchestration around nondeterministic agents.
-
----
-
-# Features
-
-## Local-first execution
-
-Designed primarily for:
-
-* Ollama
-* local models
-* Codex CLI
-* Claude Code
-* command-driven wrappers
-
-Use cheap local models for most work.
-Escalate expensive models only where useful.
-
----
-
-## Declarative pipelines
-
-Define workflows in YAML:
-
-```yaml
-pipeline:
-  stages:
-    - id: plan
-      type: agent
-      agent: planner
-
-    - id: implement
-      type: agent
-      agent: implementer
-
-    - id: test
-      type: command
-      commands:
-        - cargo test
-
-    - id: review
-      type: review
-      agent: reviewer
-```
-
-Pipelines are intentionally portable and configurable so users can experiment with:
-
-* model routing
-* review loops
-* retry logic
-* prompt engineering
-* reasoning formats
-* planning strategies
-* context structures
-* cost/performance tradeoffs
-
-NightShift is designed to make these workflow experiments measurable and repeatable rather than ad-hoc.
-
-```yaml
-pipeline:
-  stages:
-    - id: plan
-      type: agent
-      agent: planner
-
-    - id: implement
-      type: agent
-      agent: implementer
-
-    - id: test
-      type: command
-      commands:
-        - cargo test
-
-    - id: review
-      type: review
-      agent: reviewer
-```
-
----
-
-## Review-first workflows
-
-NightShift is designed around:
-
-```text
-plan
-  -> review
-  -> implement
-  -> test
-  -> static analysis
-  -> review
-  -> retry or complete
-```
-
-The goal is:
-
-> Wake up to a useful review package.
-
----
-
-## Durable artifacts
-
-Every run creates a full audit trail.
-
-Example:
-
-```text
-.nightshift/
-  runs/
-    2026-05-16-overnight/
-      run-summary.md
-
-      tasks/
-        TASK-001/
-          plan.md
-          review.md
-          implementation-log.md
-          test-output.txt
-          diff.patch
-```
-
-This makes:
-
-* debugging easier
-* prompt experimentation possible
-* retries understandable
-* failures inspectable
-* portfolio demos stronger
-
----
-
-## Scoped repository safety
-
-NightShift can:
-
-* restrict writable directories
-* allowlist commands
-* block dangerous shell operations
-* require clean git worktrees
-
-The system is intentionally conservative.
-
----
-
-# Philosophy
-
-NightShift follows a few core principles.
-
-## Deterministic orchestration
-
-Agents are probabilistic.
-
-The pipeline runner should not be.
-
----
-
-## Context compaction
-
-Do not dump infinite history into prompts.
-
-Use:
-
-* project context
-* task context
-* retry summaries
-
-Keep context compact and intentional.
-
----
-
-## Reviewability over autonomy
-
-NightShift is optimized to produce:
-
-* reviewable work
-* reviewable reasoning
-* reviewable failure
-
-Not autonomous deployment.
-
----
-
-## Boring reliability beats magical demos
-
-The system should:
-
-* fail clearly
-* retry explicitly
-* preserve artifacts
-* avoid spooky hidden behavior
-
----
-
-# Architecture Overview
-
-```text
-Task Parser
-    ↓
-Pipeline Runner
-    ↓
-Stage Executor
- ┌────┴────┐
- ↓         ↓
-Agents   Commands
-```
-
-Core components:
-
-* Task parser
-* Pipeline runner
-* Stage executor
-* Agent wrappers
-* Command runner
-* Artifact store
-* Context manager
-* Safety layer
-
----
-
-# Example Workflow
-
-Input:
-
-* repository
-* tasks.md
-* nightshift.yaml
-* agent prompt files
-
-Execution:
-
-```text
-TASK-001
-  ↓
-plan
-  ↓
-review_plan
-  ↓
-implement
-  ↓
-test
-  ↓
-static analysis
-  ↓
-review
-  ↓
-complete or retry
-```
-
-Output:
-
-* modified repository
-* task artifacts
-* overnight report
-* review notes
-
----
-
-# Installation
-
-## Status
-
-NightShift is currently an early-stage project.
-
-The MVP focuses on:
-
-* local-first execution
-* declarative pipelines
-* task orchestration
-* artifact generation
-* safe command execution
-* reviewable workflows
-
----
-
-## Planned Installation
-
-Python version:
-
-```bash
-pip install nightshift
-```
+## Install
 
 Development install:
 
 ```bash
-git clone <repo>
-cd nightshift
 pip install -e .
 ```
 
----
+You can also run the CLI module directly from a checkout:
 
-# Quickstart
+```bash
+python -m nightshift.cli --help
+```
 
-## 1. Initialize a project
+NightShift currently uses the Python standard library for runtime behavior. PyYAML is used automatically if installed, but the starter config works with the built-in YAML subset parser.
+
+## Quickstart
+
+Create starter files:
 
 ```bash
 nightshift init
 ```
 
-Creates:
+Validate the project:
 
-```text
-nightshift.yaml
-tasks.md
-agents/
+```bash
+nightshift validate
 ```
 
----
+Run the next incomplete task:
 
-## 2. Define tasks
+```bash
+nightshift run
+```
 
-Example:
+Run a specific task:
+
+```bash
+nightshift run --task TASK-001
+```
+
+Review artifacts:
+
+```text
+.nightshift/runs/<run-id>/
+```
+
+## Task File Example
+
+Tasks live in markdown checklist format:
 
 ```markdown
+# Tasks
+
 - [ ] TASK-001: Add YAML config loading
 
 Description:
@@ -398,59 +103,13 @@ Implement config loading for NightShift.
 Acceptance Criteria:
 - Loads `nightshift.yaml`
 - Validates required fields
+- Returns typed config objects
 - Includes tests
 ```
 
----
+NightShift parses task id, title, completion state, description, acceptance criteria, optional dependency bullets, and raw task markdown.
 
-## 3. Configure pipeline
-
-Example:
-
-```yaml
-project:
-  root: .
-  task_file: tasks.md
-  artifact_dir: .nightshift
-
-pipeline:
-  max_task_retries: 3
-```
-
----
-
-## 4. Run NightShift
-
-```bash
-nightshift run
-```
-
-Or:
-
-```bash
-nightshift run --task TASK-001
-```
-
----
-
-## 5. Review artifacts
-
-```text
-.nightshift/runs/<run-id>/
-```
-
-Contains:
-
-* plans
-* logs
-* diffs
-* test output
-* review notes
-* summaries
-
----
-
-# Example Config
+## Config Example
 
 ```yaml
 project:
@@ -460,210 +119,160 @@ project:
   artifact_dir: .nightshift
 
 safety:
-  require_clean_worktree: true
-
+  require_clean_worktree: false
   scoped_paths:
-    - src/
-    - tests/
-
+    - .
   allowed_commands:
-    - cargo test
-    - cargo fmt --check
-
+    - python -m unittest
   forbidden_commands:
     - rm -rf
     - git push
+    - curl | bash
 
 agents:
   planner:
     backend: command
-    command: codex
+    command: echo
     system_prompt: agents/planner.md
 
   implementer:
     backend: command
-    command: codex
+    command: echo
     system_prompt: agents/implementer.md
 
   reviewer:
     backend: command
-    command: codex
+    command: echo
     system_prompt: agents/reviewer.md
 
 pipeline:
   max_task_retries: 3
-
   stages:
     - id: plan
       type: agent
       agent: planner
+      output: plan.md
 
     - id: implement
       type: agent
       agent: implementer
+      output: implementation-log.md
 
     - id: test
       type: command
       commands:
-        - cargo test
+        - python -m unittest
+      output: test-output.txt
 
     - id: review
-      type: review
+      type: agent_review
       agent: reviewer
+      on_fail: implement
+      output: review.md
+
+    - id: summarize
+      type: summarize
+      output: final-notes.md
 ```
 
----
+## Agent Backends
 
-# Safety Model
+The MVP supports `backend: command`.
 
-NightShift intentionally limits agent freedom.
+NightShift builds a prompt bundle containing:
 
-## Repository scope restrictions
+- system prompt
+- stage id and type
+- task markdown
+- acceptance criteria
+- project context
+- task context
+- previous stage output
+- retry notes
+- output contract
 
-Agents should only operate within configured project paths.
+The prompt is passed to the configured command on stdin. stdout, stderr, exit code, duration, and the prompt are persisted as artifacts.
 
----
-
-## Command allowlists
-
-Commands must be explicitly permitted.
-
-Example:
+Review agents should emit:
 
 ```yaml
-allowed_commands:
-  - cargo test
-  - cargo fmt --check
+status: pass | fail | retry | escalate
+reason: <short explanation>
+next_stage: <optional stage id>
+context_update: <compact useful note>
 ```
 
----
+## Safety Model
 
-## Dangerous command blocking
+NightShift validates paths and commands before execution.
 
-NightShift may block commands such as:
+Path safety:
+
+- project roots are resolved with `pathlib`
+- task files and prompt files must stay inside the project root
+- artifact paths cannot escape `.nightshift/`
+- task artifact writes cannot escape the task directory
+
+Command safety:
+
+- command stages must match `allowed_commands`
+- forbidden fragments are blocked before allowlist acceptance
+- command output and exit codes are recorded
+- command stages stop at the first failing or timed-out command
+
+The MVP does not push, deploy, create branches, or execute arbitrary Python hooks.
+
+## Artifact Layout
+
+A run creates human-readable artifacts:
 
 ```text
-rm -rf
-git push
-curl | bash
+.nightshift/
+  project-context.md
+  runs/
+    <run-id>/
+      run-summary.md
+      config.snapshot.yaml
+      tasks/
+        TASK-001/
+          task.md
+          context.md
+          plan.md
+          implementation-log.md
+          test-output.txt
+          review.md
+          stage-results.md
+          context-out.md
+          final-notes.md
 ```
 
----
+Artifacts are written even when a stage fails where possible.
 
-## Review-first workflow
+## Development
 
-The system assumes:
+Run tests:
 
-> Humans remain the final authority.
+```bash
+python -m unittest discover -v
+```
 
----
+Compile-check modules:
 
-# Roadmap
+```bash
+python -m compileall nightshift tests
+```
 
-## MVP
+## Roadmap
 
-* [ ] YAML config loading
-* [ ] Markdown task parsing
-* [ ] Pipeline execution
-* [ ] Fake command agents
-* [ ] Artifact generation
-* [ ] Safe command execution
-* [ ] Retry handling
-* [ ] Overnight reports
+Next major work:
 
-## Future
+- real local model wrappers
+- stronger git safety and diff capture
+- task completion updates
+- dependency handling
+- richer status command
+- prompt and model experimentation
+- optional branch isolation
+- longer-run multi-task reports
 
-* [ ] Ollama integration
-* [ ] Claude Code integration
-* [ ] Codex integration
-* [ ] Parallel execution
-* [ ] DAG workflows
-* [ ] Prompt A/B testing
-* [ ] Cost telemetry
-* [ ] Git branch isolation
-* [ ] Dashboard UI
-* [ ] Constraint-language experimentation
-
----
-
-# Inspiration
-
-NightShift is inspired by:
-
-* CI/CD systems
-* build pipelines
-* state machines
-* agent orchestration research
-* distributed systems thinking
-* local-first tooling
-* practical AI skepticism
-
----
-
-# Philosophy Statement
-
-NightShift rejects two extremes:
-
-## Fully manual engineering
-
-Too slow.
-
-## Reckless autonomous agents
-
-Too unreliable.
-
-Instead:
-
-> NightShift treats AI systems as bounded workers inside deterministic workflows.
-
-The goal is not artificial software gods.
-
-The goal is trustworthy leverage.
-
----
-
-# License
-
-Planned:
-
-GPLv3
-
-Rationale:
-
-NightShift is licensed under GPLv3 because AI-assisted software engineering is rapidly becoming dependent on opaque, vendor-controlled tooling. As agent systems become part of the actual software production process, users deserve the freedom to inspect, modify, audit, and reproduce the systems operating on their codebases. GPLv3 helps ensure that improvements to NightShift and its orchestration layer remain part of a transparent, inspectable ecosystem rather than disappearing into proprietary black boxes. The goal is not just open source for its own sake, but preserving user autonomy, local-first experimentation, and the ability to understand how automated systems are making decisions inside increasingly critical engineering workflows.
-
-* encourages community contribution
-* protects local-first ecosystem
-* aligns with hacker/free software ethos
-
-[Read more here, GPLv3 saves the world.](https://www.gnu.org/licenses/rms-why-gplv3.html)
-
----
-
-# Contributing
-
-NightShift is intentionally early and experimental.
-
-Good contributions:
-
-* safety improvements
-* pipeline reliability
-* better artifact systems
-* better context compaction
-* local model integrations
-* tests
-* docs
-
-Bad contributions:
-
-* adding magical autonomy before reliability exists
-* removing safety boundaries
-* overcomplicated abstractions before MVP stability
-
----
-
-# Final Note
-
-AI coding tools are currently optimized for demos.
-
-NightShift is optimized for surviving the night.
+NightShift remains oriented around reviewable output, not blind autonomy.

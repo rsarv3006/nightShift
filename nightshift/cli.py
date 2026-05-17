@@ -9,7 +9,8 @@ import sys
 from .config import validate_config
 from .errors import NightShiftError
 from .init import init_project
-from .tasks import parse_task_file
+from .pipeline import PipelineRunner
+from .tasks import parse_task_file, select_next_incomplete_task, select_task_by_id
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,7 +26,10 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser = subparsers.add_parser("validate", help="Validate nightshift.yaml.")
     validate_parser.add_argument("--config", default="nightshift.yaml", help="Config file to validate.")
 
-    subparsers.add_parser("run", help="Pipeline execution is planned for a later phase.")
+    run_parser = subparsers.add_parser("run", help="Run the configured pipeline for one task.")
+    run_parser.add_argument("--config", default="nightshift.yaml", help="Config file to use.")
+    run_parser.add_argument("--task", help="Specific task id to run.")
+
     subparsers.add_parser("status", help="Status reporting is planned for a later phase.")
 
     return parser
@@ -54,7 +58,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Incomplete tasks: {incomplete}")
             return 0
 
-        if args.command in {"run", "status"}:
+        if args.command == "run":
+            config = validate_config(args.config)
+            tasks = parse_task_file(config.project.root, config.project.task_file)
+            task = select_task_by_id(tasks, args.task) if args.task else select_next_incomplete_task(tasks)
+            result = PipelineRunner(config).run_task(task)
+            print(f"Task: {result.task_id}")
+            print(f"Status: {result.status}")
+            print(f"Retries: {result.retry_count}")
+            print(f"Artifacts: {result.artifact_dir}")
+            print(f"Reason: {result.reason}")
+            return 0 if result.status == "complete" else 1
+
+        if args.command in {"status"}:
             parser.error(f"'{args.command}' is not implemented yet.")
 
     except NightShiftError as exc:
