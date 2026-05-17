@@ -41,8 +41,10 @@ Do not run apply-mode experiments directly against the checked-in example. Copy 
 PowerShell:
 
 ```powershell
-Copy-Item -Recurse C:\Users\metis\Documents\GitHub\nightShift\examples\quickstart-lisp C:\Users\metis\Documents\tiny-lisp-model
-Set-Location C:\Users\metis\Documents\tiny-lisp-model
+$NightShiftRepo = "C:\path\to\nightShift"
+$TargetProject = "$HOME\Documents\tiny-lisp-model"
+Copy-Item -Recurse "$NightShiftRepo\examples\quickstart-lisp" $TargetProject
+Set-Location $TargetProject
 ```
 
 Bash:
