@@ -844,291 +844,267 @@ Mitigation:
 
 ---
 
-# 16. MVP Definition
+# 16. Implemented Baseline
 
-The minimum viable NightShift implementation should:
+The MVP and post-MVP phases through phase 22 are implemented.
 
-1. Parse markdown tasks
-2. Execute a declarative pipeline
-3. Support local agents
-4. Generate plans
-5. Generate implementations
-6. Run tests
-7. Run static analysis
-8. Run review agents
-9. Retry failed stages
-10. Produce artifacts
-11. Produce an overnight summary
-12. Restrict repository access
+NightShift currently provides:
 
-This MVP is sufficient to:
+* `nightshift init` for starter project generation
+* `nightshift validate` for config, prompt, task, dependency, path, and command validation
+* `nightshift status` for read-only project inspection
+* `nightshift run` for the next runnable incomplete task
+* `nightshift run --task TASK-ID` for a specific task
+* `nightshift run --all` for sequential multi-task execution
+* `nightshift web` for a read-only artifact dashboard
+* Markdown task parsing with descriptions, acceptance criteria, completion state, and dependency bullets
+* Dependency validation for missing references and simple cycles
+* Dependency-aware task selection and task blocking
+* Declarative YAML pipeline execution
+* Command, agent, agent-review, review, and summarize stage handling
+* Retry redirection with a configured task retry limit
+* Command-backed agents
+* Ollama-backed local model agents
+* Prompt bundle construction with project, task, retry, and previous-stage context
+* Prompt snapshots and run metadata for experiment comparison
+* Optional experiment labels and prompt variant metadata
+* Command allowlists and forbidden-fragment checks
+* Optional shell-free command execution
+* Per-stage command timeouts
+* Project-root-restricted command working directories
+* Environment variable allowlists for command stages
+* Scoped path and artifact path safety checks
+* Optional clean-worktree enforcement
+* Pre-run and post-run git status artifacts
+* Per-task `diff.patch` artifacts
+* Task completion mutation for successful runs
+* Per-run and per-task markdown/text artifacts
+* Project, task, retry, and context-out files
+* Final task notes, stage summaries, task completion artifacts, and run summaries
+* Documentation for config, artifact review, troubleshooting, and quickstart workflows
+* A complete fake-agent quickstart Lisp example under `examples/quickstart-lisp/`
 
-* Demonstrate orchestration architecture
-* Demonstrate AI pipeline engineering
-* Demonstrate safety-aware automation
-* Serve as a strong portfolio project
+The system remains sequential and local-first. It is designed to produce reviewable artifacts and repository state, not to deploy, push, or autonomously ship changes.
 
 ---
 
-# 17. MVP Implementation Status
+# 17. Current Product Shape
 
-The first MVP pass is implemented across phases 1 through 11.
+The implemented product is now a practical local runner rather than only a single-task MVP.
 
-Implemented capabilities:
+## 17.1 CLI Workflow
 
-* Project initialization
-* Config validation
-* Markdown task parsing
-* Path and command safety checks
-* Artifact storage
-* Command stage execution
-* Command-backed agent execution
-* Deterministic pipeline execution
-* Retry redirection and retry limits
-* Context file creation and prompt injection
-* Final task notes and run summaries
-* README documentation
+Common workflow:
 
-Known MVP limitations:
+```text
+nightshift init
+nightshift validate
+nightshift status
+nightshift run
+nightshift run --task TASK-001
+nightshift run --all
+nightshift web
+```
 
-* Only the `command` agent backend is implemented
-* `nightshift status` is still a placeholder
-* Clean worktree enforcement is not fully wired
-* Diff patch capture is not implemented
-* Task completion mutation is not implemented
-* Task dependency enforcement is not implemented
-* Multi-task overnight batching is not implemented
+The CLI can validate a project, select runnable tasks, enforce dependencies, run one or more tasks, and report artifact locations.
+
+## 17.2 Artifact Workflow
+
+Artifacts are still the primary audit surface.
+
+Current run artifacts include:
+
+```text
+.nightshift/
+  project-context.md
+  runs/
+    <run-id>/
+      run-summary.md
+      config.snapshot.yaml
+      run-metadata.md
+      prompts/
+        <agent-id>.md
+      tasks/
+        TASK-001/
+          task.md
+          context.md
+          plan.md
+          implementation-log.md
+          test-output.txt
+          review.md
+          stage-results.md
+          context-out.md
+          task-completion.md
+          git-status-before.txt
+          git-status-after.txt
+          diff.patch
+          final-notes.md
+```
+
+Exact task artifact names depend on configured stage `output` values.
+
+## 17.3 Dashboard Workflow
+
+The web dashboard is read-only and artifact-driven.
+
+It currently:
+
+* Lists runs from `.nightshift/runs/`
+* Shows run summaries
+* Links to text and markdown artifacts
+* Safely rejects artifact path traversal
+* Auto-refreshes
+
+It does not:
+
+* Start or stop runs
+* Mutate config or tasks
+* Provide approval gates
+* Stream live process output
+* Authenticate users
+
+## 17.4 Known Limitations
+
+Current limitations:
+
+* Execution is sequential; there is no parallel task runner.
+* The web dashboard is read-only and artifact-oriented.
+* Live run progress is limited to basic CLI prints and artifact inspection.
+* Flask is optional; `nightshift web` requires it to be installed.
+* Ollama support depends on the user's local Ollama installation and model availability.
+* Git artifacts can be unavailable or degraded in non-git repositories or repositories blocked by Git safe-directory rules.
+* Task mutation is intentionally minimal and only flips matching checklist lines.
+* Command configuration is safer than the MVP but is still string-first for compatibility.
+* There is no branch isolation, resumable run state machine, approval workflow, or deployment integration.
 
 ---
 
 # 18. Next Major Update Plan
 
-The next major update should turn the single-task MVP into a more practical local runner while preserving the same safety and auditability model.
+The next major update should improve operational visibility while preserving the current artifact-first model.
 
-## Phase 12: Status Command
+## Phase 23: Improved Logging and Live Visibility
 
-* [ ] Implement `nightshift status`
-* [ ] Print config path and project root
-* [ ] Print task counts
-* [ ] Print next incomplete task
-* [ ] Print latest run directory
-* [ ] Print validation warnings where useful
-* [ ] Add tests
+NightShift should make active runs easier to observe from both the CLI and the web dashboard.
 
-Acceptance Criteria:
+Implementation tasks:
 
-* User can inspect project state without running a pipeline
-* Missing or malformed inputs produce clear errors
-* Latest artifacts are discoverable from the CLI
-
----
-
-## Phase 13: Git Safety and Diff Artifacts
-
-* [ ] Implement clean-worktree enforcement when configured
-* [ ] Capture pre-run git status
-* [ ] Capture post-run git status
-* [ ] Write `diff.patch`
-* [ ] Include changed files in final reports
-* [ ] Handle non-git repositories gracefully
-* [ ] Add tests with temporary git repositories where practical
+* [ ] Add a small logging module with structured operational events.
+* [ ] Stream human-readable progress to the CLI during `run` and `run --all`.
+* [ ] Include run id, task id, stage id, agent/backend, command index, retry count, status, duration, and artifact path where available.
+* [ ] Write a per-run log file such as `.nightshift/runs/<run-id>/run.log`.
+* [ ] Optionally write or rotate an aggregate `.nightshift/nightshift.log` for cross-run troubleshooting.
+* [ ] Keep logs operational; do not duplicate full prompts, full model responses, or full command output that already lives in artifacts.
+* [ ] Redact or avoid secrets from logged environment/config values.
+* [ ] Add dashboard support for viewing the latest log tail.
+* [ ] Cap the dashboard log view to the last 100 lines by default.
+* [ ] Keep the full per-run log file available as an artifact unless a later size cap is configured.
+* [ ] Auto-refresh the dashboard log view with the existing dashboard refresh model.
+* [ ] Add tests for log writing, CLI progress hooks, dashboard log rendering, missing log files, and the 100-line cap.
 
 Acceptance Criteria:
 
-* `require_clean_worktree: true` blocks dirty repositories
-* Diffs are persisted after task execution
-* Reports identify modified files without requiring users to inspect every artifact
-
----
-
-## Phase 14: Task Completion Updates
-
-* [ ] Mark completed tasks in `tasks.md`
-* [ ] Preserve task file formatting where practical
-* [ ] Avoid marking failed tasks complete
-* [ ] Record task completion decisions in artifacts
-* [ ] Add tests
-
-Acceptance Criteria:
-
-* Successful runs can mark `[ ]` tasks as `[x]`
-* Failed runs leave tasks incomplete
-* Task file updates are reviewable and minimal
-
----
-
-## Phase 15: Multi-Task Run Mode
-
-* [ ] Add `nightshift run --all`
-* [ ] Process incomplete tasks in file order
-* [ ] Stop or continue on failure based on config
-* [ ] Create per-task artifact directories under one run
-* [ ] Generate aggregate run summary
-* [ ] Add tests
-
-Acceptance Criteria:
-
-* User can run more than one task unattended
-* Each task remains independently reviewable
-* Aggregate summary shows completed and failed tasks
-
----
-
-## Phase 16: Dependency Handling
-
-* [ ] Parse dependency bullets into structured task dependencies
-* [ ] Block tasks whose dependencies are incomplete
-* [ ] Detect missing dependency references
-* [ ] Detect simple dependency cycles
-* [ ] Report blocked tasks in status and run summaries
-* [ ] Add tests
-
-Acceptance Criteria:
-
-* Tasks do not run before declared dependencies are complete
-* Dependency errors are clear and actionable
-* Task ordering remains deterministic
-
----
-
-## Phase 17: Local Model Backend
-
-* [ ] Add an Ollama-compatible agent backend
-* [ ] Keep the existing command backend
-* [ ] Reuse prompt bundle construction
-* [ ] Persist request/response metadata
-* [ ] Handle model errors and timeouts
-* [ ] Add fake backend tests without requiring Ollama
-
-Acceptance Criteria:
-
-* Users can configure a local model backend for agent stages
-* Tests do not require real model calls
-* Agent artifacts remain comparable across backends
-
----
-
-## Phase 18: Prompt and Pipeline Experiments
-
-* [ ] Add prompt variant identifiers
-* [ ] Snapshot prompt files per run
-* [ ] Record agent backend metadata
-* [ ] Add optional experiment labels to config
-* [ ] Include experiment metadata in reports
-* [ ] Add tests
-
-Acceptance Criteria:
-
-* Users can compare prompt/pipeline runs from artifacts
-* Reports show which prompts and backend settings produced a result
-* Experiment metadata does not change execution semantics
-
----
-
-## Phase 19: Stronger Command Execution
-
-* [ ] Replace shell-string execution where possible with parsed argv execution
-* [ ] Preserve compatibility with explicit shell command stages when configured
-* [ ] Add per-command timeout config
-* [ ] Add environment variable allowlists
-* [ ] Add working-directory restrictions
-* [ ] Add tests
-
-Acceptance Criteria:
-
-* Command execution is safer by default
-* Shell execution is explicit rather than implicit
-* Command behavior remains auditable
-
----
-
-## Phase 20: Documentation and Examples Refresh
-
-* [ ] Add complete example project
-* [ ] Add example fake-agent pipeline
-* [ ] Add example local-model pipeline
-* [ ] Document artifact review workflow
-* [ ] Document troubleshooting
-* [ ] Add config reference
-
-Acceptance Criteria:
-
-* New users can run a complete demo from a fresh checkout
-* Documentation distinguishes implemented features from planned features
-* Examples remain safe to run locally
-
----
-
-## Phase 21: Read-Only Web Dashboard
-
-* [ ] Add a Flask-based `nightshift web` command
-* [ ] Read run state from `.nightshift/runs/`
-* [ ] Show latest run summary
-* [ ] Show task status and retry count
-* [ ] Show stage results and artifact links
-* [ ] Render markdown/plain-text artifacts safely
-* [ ] Add simple auto-refresh
-* [ ] Keep the dashboard read-only
-* [ ] Add tests for route rendering and missing artifact handling
-
-Acceptance Criteria:
-
-* User can monitor a run from a browser without controlling execution
-* Dashboard works from existing artifact files
-* Missing or partial run artifacts do not crash the server
-* No config, task, command, or pipeline mutation is exposed from the UI
+* A user running NightShift from a terminal can tell which task and stage are active.
+* Long Ollama or command stages show enough lifecycle information that the process does not appear hung.
+* The latest run log is visible from `nightshift web`.
+* The web client displays at most the last 100 log lines by default.
+* Logs point users to detailed artifacts instead of replacing them.
+* Missing or partial log files do not crash the dashboard.
 
 Notes:
 
-* This phase should avoid websockets and process control at first.
-* The dashboard should be artifact-driven so it remains decoupled from pipeline internals.
-* Start/stop controls, authentication, live log streaming, and approval gates are separate future work.
+* This phase should not add process control, websockets, authentication, or write actions to the web client.
+* If future live streaming is needed, the first version can still use file tailing plus refresh before introducing websockets.
+* Operational logs should complement artifacts: artifacts remain the source of detailed prompts, responses, command output, diffs, and summaries.
 
----
+## Phase 24: Per-Agent Model Parameters
 
-## Phase 22: Quickstart Test Project
+- [ ] Add `temperature` to agent config.
+- [ ] Pass temperature to Ollama/OpenAI-compatible backends.
+- [ ] Default safely if omitted.
+- [ ] Add config validation tests.
 
-* [ ] Add a guided quickstart project to `QUICKSTART.md`
-* [ ] Recommend a small Python Lisp interpreter as the default test project
-* [ ] Provide a multi-task `tasks.md` example
-* [ ] Provide a matching `nightshift.yaml` example
-* [ ] Provide suggested planner, implementer, and reviewer prompt files
-* [ ] Include dependency examples across tasks
-* [ ] Include commands for validation, `run --task`, and `run --all`
-* [ ] Explain what artifacts the user should inspect after each run
+## Phase 25: Repo Lookup Tools MVP
 
-Acceptance Criteria:
+- [ ] Add tool interface for repo operations.
+- [ ] Implement scoped `list_files`.
+- [ ] Implement scoped `read_file`.
+- [ ] Implement scoped `grep`.
+- [ ] Enforce existing path safety rules.
+- [ ] Log tool calls as artifacts.
 
-* A new user can create a small target repo and exercise NightShift end to end
-* The project has multiple independently reviewable tasks
-* Tasks are small enough for local/fake agents but realistic enough to test planning, implementation, tests, retries, artifacts, and dependencies
-* The quickstart does not require external services
+## Phase 26: Planner Code-Discovery Support
 
-Recommended Project:
+- [ ] Teach planner prompt to request needed code context.
+- [ ] Add structured planner output for lookup requests.
+- [ ] Execute requested lookup tools.
+- [ ] Save `files-inspected.md`.
+- [ ] Re-run planner with retrieved context.
 
-* A minimal Lisp interpreter in Python is a good test project because it is compact, incremental, testable, and naturally splits into parser, evaluator, environment, builtins, and error-handling tasks.
+## Phase 27: Context Pack Builder
 
-Alternative Projects:
+- [ ] Add `repo_context` stage.
+- [ ] Generate `context-pack.md`.
+- [ ] Include task, acceptance criteria, relevant files, snippets, and constraints.
+- [ ] Add line-numbered excerpts.
+- [ ] Add context-size caps.
 
-* If the Lisp interpreter feels too language-theory focused, use a small INI/TOML-like config parser or a markdown todo CLI. Both are also compact and testable, but the Lisp interpreter gives better coverage of multi-step implementation and test generation.
+## Phase 28: Project Context Chart MVP
 
----
+- [ ] Generate `.nightshift/project-context-chart.md`.
+- [ ] Include files, responsibilities, functions/classes, entry points, tests.
+- [ ] Use simple regex/parser MVP.
+- [ ] Update chart during planning.
+- [ ] Store anchors/line numbers/search terms.
 
-## Phase 17-22 Implementation Status
+## Phase 29: Code Writer Stage
 
-Phases 17 through 22 are implemented.
+- [ ] Add `code_writer` stage type.
+- [ ] Feed it task + context pack.
+- [ ] Require unified diff output.
+- [ ] Save `proposed.patch`.
+- [ ] Save `implementation-summary.md`.
 
-Implemented capabilities:
+## Phase 30: Patch Normalization
 
-* Ollama agent backend
-* Experiment metadata and prompt snapshots
-* Stronger command execution options
-* Config reference, artifact review, and troubleshooting docs
-* Read-only Flask dashboard entry point
-* Complete quickstart Lisp example project
+- [ ] Add `patch_normalizer` stage.
+- [ ] Support low-temperature formatter model.
+- [ ] Convert messy model output to valid unified diff.
+- [ ] Reject missing/ambiguous edits.
+- [ ] Save `normalized.patch`.
 
-See `docs/devlog/phase17.md` through `docs/devlog/phase22.md` for implementation notes and decisions.
+## Phase 31: Patch Validation
 
+- [ ] Parse unified diffs.
+- [ ] Reject malformed patches.
+- [ ] Enforce scoped paths.
+- [ ] Reject path traversal.
+- [ ] Enforce max files/max lines changed.
+- [ ] Reject forbidden files.
+
+## Phase 32: Patch Apply / Dry Run
+
+- [ ] Add `patch_apply` stage.
+- [ ] Support `mode: dry_run`.
+- [ ] Support `mode: apply`.
+- [ ] Save `applied.patch`.
+- [ ] Preserve pre/post git status.
+- [ ] Fail cleanly on apply errors.
+
+## Phase 33: Test Feedback Repair Loop
+
+- [ ] Feed test/static failure output back into implementer.
+- [ ] Add bounded repair attempts.
+- [ ] Save each repair patch.
+- [ ] Save repair summaries.
+- [ ] Stop after max retry count.
+
+## Phase 34: End-to-End Coding Quickstart
+
+- [ ] Update quickstart to modify real code.
+- [ ] Include fake-agent test fixture.
+- [ ] Demonstrate lookup → context pack → patch → apply → test.
+- [ ] Document dry-run vs apply mode.
 ---
 
 # Appendix A: Design Decisions and Rationale
