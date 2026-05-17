@@ -454,6 +454,59 @@ Acceptance Criteria:
             self.assertEqual(result.status, "failed")
             self.assertIn("forbidden path", result.reason)
 
+    def test_patch_validation_failure_can_retry_implementation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_common_files(root)
+            (root / "app.py").write_text("old\n", encoding="utf-8")
+            (root / "fake_writer.py").write_text(
+                "\n".join(
+                    [
+                        "import sys",
+                        "prompt = sys.stdin.read()",
+                        "new_file_patch = 'Retry 1:' not in prompt",
+                        "if new_file_patch:",
+                        "    print('diff --git a/app.py b/app.py')",
+                        "    print('new file mode 100644')",
+                        "    print('--- /dev/null')",
+                        "    print('+++ b/app.py')",
+                        "    print('@@ -0,0 +1 @@')",
+                        "    print('+bad')",
+                        "else:",
+                        "    print('diff --git a/app.py b/app.py')",
+                        "    print('--- a/app.py')",
+                        "    print('+++ b/app.py')",
+                        "    print('@@ -1 +1 @@')",
+                        "    print('-old')",
+                        "    print('+new')",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            stages = (
+                StageConfig(id="write", type="code_writer", agent="writer"),
+                StageConfig(id="normalize", type="patch_normalizer"),
+                StageConfig(id="validate", type="patch_validator", on_fail="write"),
+            )
+            config = make_config(root, stages, max_retries=1)
+            config.agents["writer"] = AgentConfig(
+                id="writer",
+                backend="command",
+                command="python fake_writer.py",
+                system_prompt=Path("planner.md"),
+            )
+            runner = PipelineRunner(config, ArtifactStore(root, ".nightshift", run_id="test-run"))
+
+            result = runner.run_task(parse_tasks(TASK_MD)[0])
+
+            task_dir = root / ".nightshift" / "runs" / "test-run" / "tasks" / "TASK-001"
+            self.assertEqual(result.status, "complete")
+            self.assertEqual(result.retry_count, 1)
+            self.assertTrue(
+                any("creates existing file" in stage.reason for stage in result.stage_results)
+            )
+            self.assertTrue((task_dir / "repair-1.patch").exists())
+
     def test_patch_apply_stage_applies_patch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

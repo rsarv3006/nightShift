@@ -156,6 +156,7 @@ pipeline:
       output: patch-validation.md
       max_files: 8
       max_lines: 800
+      on_fail: implement
 
     - id: apply_patch
       type: patch_apply

@@ -172,6 +172,7 @@ pipeline:
     - id: validate_patch
       type: patch_validator
       output: patch-validation.md
+      on_fail: implement
 
     - id: apply_patch
       type: patch_apply

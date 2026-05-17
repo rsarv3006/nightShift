@@ -251,6 +251,7 @@ Patch validator:
   output: patch-validation.md
   max_files: 4
   max_lines: 400
+  on_fail: implement
   forbidden_paths:
     - .git
     - .nightshift

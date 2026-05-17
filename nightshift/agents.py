@@ -468,6 +468,7 @@ def output_contract_for(stage: StageConfig) -> str:
                 "Return a unified diff only, suitable for saving as proposed.patch.",
                 "Do not include prose outside the patch.",
                 "Use diff --git headers and hunk headers.",
+                "For existing files, do not use new file mode or /dev/null headers.",
             ]
         )
     if stage.type == "patch_normalizer":
