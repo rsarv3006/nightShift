@@ -38,6 +38,17 @@ class GitSafetyTests(unittest.TestCase):
             self.assertTrue(diff_path.exists())
             self.assertIn("Git Status before", status_path.read_text(encoding="utf-8"))
 
+    def test_diff_artifact_is_concise_outside_git_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifacts = ArtifactStore(root, ".nightshift", run_id="test-run")
+
+            diff_path = write_diff_artifact(artifacts, "TASK-001")
+
+            content = diff_path.read_text(encoding="utf-8")
+            self.assertIn("project root is not a git work tree", content)
+            self.assertNotIn("usage: git diff", content)
+
 
 if __name__ == "__main__":
     unittest.main()

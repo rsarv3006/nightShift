@@ -33,7 +33,7 @@ lookup_requests:
   path: nightshift/pipeline.py
 - tool: grep
   path: nightshift
-  pattern: PipelineRunner
+  pattern: `PipelineRunner`
 """
 
         requests = parse_lookup_requests(output)

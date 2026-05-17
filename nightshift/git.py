@@ -43,6 +43,15 @@ def get_git_status(project_root: Path) -> GitCommandResult:
     return run_git(project_root, ["status", "--short"])
 
 
+def get_git_repository_state(project_root: Path) -> GitCommandResult:
+    return run_git(project_root, ["rev-parse", "--is-inside-work-tree"])
+
+
+def is_git_repository(project_root: Path) -> bool:
+    state = get_git_repository_state(project_root)
+    return state.available and state.stdout.strip() == "true"
+
+
 def ensure_clean_worktree(project_root: Path, require_clean: bool) -> None:
     if not require_clean:
         return
@@ -63,9 +72,14 @@ def write_git_artifacts(artifacts: ArtifactStore, task_id: str, when: str) -> Pa
 
 
 def write_diff_artifact(artifacts: ArtifactStore, task_id: str) -> Path:
+    if not is_git_repository(artifacts.project_root):
+        content = "Git diff unavailable.\n\nReason: project root is not a git work tree.\n"
+        return artifacts.write_stage_output(task_id, "diff.patch", content)
+
     diff = run_git(artifacts.project_root, ["diff", "--binary"], timeout_seconds=30)
     if not diff.available:
-        content = "Git diff unavailable.\n\n" + (diff.stderr or "")
+        details = (diff.stderr or "unknown git error").strip()
+        content = f"Git diff unavailable.\n\nReason: {details}\n"
     elif diff.stdout:
         content = diff.stdout
     else:

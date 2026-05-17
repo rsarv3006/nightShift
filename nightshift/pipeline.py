@@ -436,17 +436,49 @@ class PipelineRunner:
         chart_path = self.artifacts.project_context_chart_path
         if chart_path.exists():
             enriched_outputs["project-context-chart.md"] = chart_path.read_text(encoding="utf-8", errors="replace")
+        context = self.context.read_context(task, retry_notes)
         result = self.agent_executor.run_stage(
             stage,
             task,
             enriched_outputs,
             retry_notes,
-            project_context=self.context.read_context(task, retry_notes).project_context,
-            task_context=self.context.read_context(task, retry_notes).task_context,
-            retry_context=self.context.read_context(task, retry_notes).retry_context,
+            project_context=context.project_context,
+            task_context=context.task_context,
+            retry_context=context.retry_context,
         )
         raw_output = self._read_output(result.output_path)
         stdout = extract_agent_stdout(raw_output)
+        lookup_requests = parse_lookup_requests(stdout)
+        if lookup_requests and "diff --git " not in stdout:
+            lookup_context = self.repo_tools.execute_requests(
+                task.id,
+                lookup_requests,
+                filename="implementation-files-inspected.md",
+            )
+            self.logger.event(
+                "agent.rerun",
+                "Re-running code writer with repo lookup context",
+                stage_id=stage.id,
+                task_id=task.id,
+                lookup_count=len(lookup_requests),
+            )
+            rerun_outputs = dict(enriched_outputs)
+            rerun_outputs["repo_lookup_results"] = lookup_context
+            rerun_notes = [
+                *retry_notes,
+                "Repository lookup results have been provided. Return the unified diff now; do not request more lookups.",
+            ]
+            result = self.agent_executor.run_stage(
+                stage,
+                task,
+                rerun_outputs,
+                rerun_notes,
+                project_context=context.project_context,
+                task_context=context.task_context,
+                retry_context="\n".join(f"- {note}" for note in rerun_notes),
+            )
+            raw_output = self._read_output(result.output_path)
+            stdout = extract_agent_stdout(raw_output)
         try:
             patch = extract_unified_diff(stdout)
         except PipelineError as exc:
@@ -657,14 +689,18 @@ class PipelineRunner:
         )
         rerun_outputs = dict(previous_outputs)
         rerun_outputs["repo_lookup_results"] = lookup_context
+        rerun_retry_notes = [
+            *retry_notes,
+            "Repository lookup results have been provided. Write the final plan now; do not request more lookups.",
+        ]
         rerun_result = self.agent_executor.run_stage(
             stage,
             task,
             rerun_outputs,
-            retry_notes,
+            rerun_retry_notes,
             project_context=project_context,
             task_context=task_context,
-            retry_context=retry_context,
+            retry_context="\n".join(f"- {note}" for note in rerun_retry_notes),
         )
         return StageResult(
             stage_id=rerun_result.stage_id,

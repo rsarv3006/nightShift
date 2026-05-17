@@ -217,7 +217,7 @@ def parse_lookup_requests(text: str, max_requests: int = DEFAULT_MAX_LOOKUP_REQU
             continue
         key, value = stripped.split(":", 1)
         key = key.strip()
-        value = value.strip().strip('"').strip("'")
+        value = value.strip().strip('"').strip("'").strip("`")
         if key == "tool" and current:
             flush()
         current[key] = value

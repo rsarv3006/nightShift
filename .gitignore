@@ -50,6 +50,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+tiny-lisp-nightshift/
 
 # Translations
 *.mo
