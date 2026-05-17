@@ -58,6 +58,7 @@ class StageConfig:
 class PipelineConfig:
     max_task_retries: int
     stages: tuple[StageConfig, ...]
+    continue_on_task_failure: bool = False
 
 
 @dataclass(frozen=True)
@@ -188,6 +189,10 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> NightShiftConfig:
     )
     if max_task_retries < 0:
         raise ConfigError("Config error: pipeline.max_task_retries must be zero or greater.")
+    continue_on_task_failure = _optional_bool(
+        pipeline_raw.get("continue_on_task_failure", False),
+        "pipeline.continue_on_task_failure",
+    )
 
     stages_raw = pipeline_raw.get("stages")
     if not isinstance(stages_raw, list) or not stages_raw:
@@ -254,7 +259,11 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> NightShiftConfig:
         project=project,
         safety=safety,
         agents=agents,
-        pipeline=PipelineConfig(max_task_retries=max_task_retries, stages=tuple(stages)),
+        pipeline=PipelineConfig(
+            max_task_retries=max_task_retries,
+            stages=tuple(stages),
+            continue_on_task_failure=continue_on_task_failure,
+        ),
     )
 
 

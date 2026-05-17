@@ -1059,6 +1059,33 @@ Acceptance Criteria:
 
 ---
 
+## Phase 21: Read-Only Web Dashboard
+
+* [ ] Add a Flask-based `nightshift web` command
+* [ ] Read run state from `.nightshift/runs/`
+* [ ] Show latest run summary
+* [ ] Show task status and retry count
+* [ ] Show stage results and artifact links
+* [ ] Render markdown/plain-text artifacts safely
+* [ ] Add simple auto-refresh
+* [ ] Keep the dashboard read-only
+* [ ] Add tests for route rendering and missing artifact handling
+
+Acceptance Criteria:
+
+* User can monitor a run from a browser without controlling execution
+* Dashboard works from existing artifact files
+* Missing or partial run artifacts do not crash the server
+* No config, task, command, or pipeline mutation is exposed from the UI
+
+Notes:
+
+* This phase should avoid websockets and process control at first.
+* The dashboard should be artifact-driven so it remains decoupled from pipeline internals.
+* Start/stop controls, authentication, live log streaming, and approval gates are separate future work.
+
+---
+
 # Appendix A: Design Decisions and Rationale
 
 ## A.1 Local-first architecture

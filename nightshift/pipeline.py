@@ -12,9 +12,10 @@ from .config import COMMAND_STAGE_TYPES, NightShiftConfig, StageConfig
 from .context import ContextManager
 from .errors import PipelineError
 from .errors import NightShiftError
+from .git import ensure_clean_worktree, write_diff_artifact, write_git_artifacts
 from .reports import ReportGenerator
 from .stages import StageResult
-from .tasks import Task
+from .tasks import Task, mark_task_completed
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,15 @@ class PipelineResult:
     retry_count: int
     stage_results: tuple[StageResult, ...]
     artifact_dir: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class MultiTaskResult:
+    status: str
+    task_results: tuple[PipelineResult, ...]
+    completed_count: int
+    failed_count: int
     reason: str
 
 
@@ -55,9 +65,11 @@ class PipelineRunner:
         )
 
     def run_task(self, task: Task) -> PipelineResult:
+        ensure_clean_worktree(self.config.project.root, self.config.safety.require_clean_worktree)
         self.artifacts.initialize_run()
         self.artifacts.write_config_snapshot(self.config.path)
         self.artifacts.write_task_snapshot(task)
+        write_git_artifacts(self.artifacts, task.id, "before")
         self.context.ensure_project_context()
         self.context.create_task_context(task)
 
@@ -133,6 +145,20 @@ class PipelineRunner:
                 if result.context_update
             ],
         )
+        completion_changed = False
+        if final_status == "complete":
+            completion_changed = mark_task_completed(
+                self.config.project.root,
+                self.config.project.task_file,
+                task.id,
+            )
+        self.artifacts.write_stage_output(
+            task.id,
+            "task-completion.md",
+            format_task_completion(task, final_status, completion_changed),
+        )
+        write_git_artifacts(self.artifacts, task.id, "after")
+        write_diff_artifact(self.artifacts, task.id)
         self.reports.write_reports(
             task,
             final_status,
@@ -149,6 +175,59 @@ class PipelineRunner:
             stage_results=tuple(stage_results),
             artifact_dir=str(self.artifacts.create_task_dir(task.id).directory.relative_to(self.config.project.root)),
             reason=final_reason,
+        )
+
+    def run_tasks(self, tasks: list[Task] | tuple[Task, ...]) -> MultiTaskResult:
+        self.artifacts.initialize_run()
+        results: list[PipelineResult] = []
+        known_ids = {task.id for task in tasks}
+        completed_ids = {task.id for task in tasks if task.completed}
+        for task in tasks:
+            if task.completed:
+                continue
+            missing_refs = [dependency for dependency in task.dependencies if dependency not in known_ids]
+            incomplete_deps = [
+                dependency for dependency in task.dependencies if dependency in known_ids and dependency not in completed_ids
+            ]
+            if missing_refs or incomplete_deps:
+                reason_parts = []
+                if missing_refs:
+                    reason_parts.append(f"missing dependencies: {', '.join(missing_refs)}")
+                if incomplete_deps:
+                    reason_parts.append(f"incomplete dependencies: {', '.join(incomplete_deps)}")
+                blocked = PipelineResult(
+                    task_id=task.id,
+                    status="blocked",
+                    retry_count=0,
+                    stage_results=(),
+                    artifact_dir="",
+                    reason="Task blocked by " + "; ".join(reason_parts),
+                )
+                results.append(blocked)
+                if not self.config.pipeline.continue_on_task_failure:
+                    break
+                continue
+            result = self.run_task(task)
+            results.append(result)
+            if result.status == "complete":
+                completed_ids.add(task.id)
+            if result.status != "complete" and not self.config.pipeline.continue_on_task_failure:
+                break
+
+        completed_count = sum(1 for result in results if result.status == "complete")
+        failed_count = sum(1 for result in results if result.status != "complete")
+        status = "complete" if failed_count == 0 else "failed"
+        reason = "All selected tasks completed." if status == "complete" else "One or more tasks failed."
+        self.artifacts.run_summary_path.write_text(
+            format_aggregate_run_summary(results, status, reason),
+            encoding="utf-8",
+        )
+        return MultiTaskResult(
+            status=status,
+            task_results=tuple(results),
+            completed_count=completed_count,
+            failed_count=failed_count,
+            reason=reason,
         )
 
     def _run_stage(
@@ -217,3 +296,40 @@ def format_summary_stage(
             "",
         ]
     )
+
+
+def format_task_completion(task: Task, status: str, changed: bool) -> str:
+    return "\n".join(
+        [
+            "# Task Completion",
+            "",
+            f"Task: `{task.id}`",
+            f"Pipeline status: {status}",
+            f"Marked complete: {str(changed).lower()}",
+            "",
+        ]
+    )
+
+
+def format_aggregate_run_summary(results: list[PipelineResult], status: str, reason: str) -> str:
+    lines = [
+        "# Run Summary",
+        "",
+        f"Status: {status}",
+        f"Reason: {reason}",
+        f"Tasks run: {len(results)}",
+        f"Completed tasks: {sum(1 for result in results if result.status == 'complete')}",
+        f"Failed tasks: {sum(1 for result in results if result.status != 'complete')}",
+        "",
+        "## Tasks",
+        "",
+    ]
+    if not results:
+        lines.append("- None")
+    for result in results:
+        lines.append(
+            f"- `{result.task_id}`: {result.status} "
+            f"(retries: {result.retry_count}) - {result.reason}"
+        )
+    lines.append("")
+    return "\n".join(lines)

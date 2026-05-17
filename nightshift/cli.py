@@ -10,7 +10,14 @@ from .config import validate_config
 from .errors import NightShiftError
 from .init import init_project
 from .pipeline import PipelineRunner
-from .tasks import parse_task_file, select_next_incomplete_task, select_task_by_id
+from .status import build_status, format_status
+from .tasks import (
+    ensure_dependencies_satisfied,
+    parse_task_file,
+    select_next_runnable_task,
+    select_task_by_id,
+    validate_task_dependencies,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,8 +36,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Run the configured pipeline for one task.")
     run_parser.add_argument("--config", default="nightshift.yaml", help="Config file to use.")
     run_parser.add_argument("--task", help="Specific task id to run.")
+    run_parser.add_argument("--all", action="store_true", help="Run all runnable incomplete tasks.")
 
-    subparsers.add_parser("status", help="Status reporting is planned for a later phase.")
+    status_parser = subparsers.add_parser("status", help="Inspect NightShift project status.")
+    status_parser.add_argument("--config", default="nightshift.yaml", help="Config file to inspect.")
 
     return parser
 
@@ -50,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "validate":
             config = validate_config(args.config)
             tasks = parse_task_file(config.project.root, config.project.task_file)
+            validate_task_dependencies(tasks)
             incomplete = sum(1 for task in tasks if not task.completed)
             print(f"Config valid: {config.path}")
             print(f"Project: {config.project.name}")
@@ -61,8 +71,23 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "run":
             config = validate_config(args.config)
             tasks = parse_task_file(config.project.root, config.project.task_file)
-            task = select_task_by_id(tasks, args.task) if args.task else select_next_incomplete_task(tasks)
-            result = PipelineRunner(config).run_task(task)
+            validate_task_dependencies(tasks)
+            if args.all and args.task:
+                parser.error("run accepts either --all or --task, not both.")
+            runner = PipelineRunner(config)
+            if args.all:
+                selected = [task for task in tasks if not task.completed]
+                result = runner.run_tasks(selected)
+                print(f"Status: {result.status}")
+                print(f"Tasks run: {len(result.task_results)}")
+                print(f"Completed: {result.completed_count}")
+                print(f"Failed: {result.failed_count}")
+                print(f"Reason: {result.reason}")
+                return 0 if result.status == "complete" else 1
+
+            task = select_task_by_id(tasks, args.task) if args.task else select_next_runnable_task(tasks)
+            ensure_dependencies_satisfied(tasks, task)
+            result = runner.run_task(task)
             print(f"Task: {result.task_id}")
             print(f"Status: {result.status}")
             print(f"Retries: {result.retry_count}")
@@ -70,8 +95,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Reason: {result.reason}")
             return 0 if result.status == "complete" else 1
 
-        if args.command in {"status"}:
-            parser.error(f"'{args.command}' is not implemented yet.")
+        if args.command == "status":
+            config = validate_config(args.config)
+            tasks = parse_task_file(config.project.root, config.project.task_file)
+            print(format_status(build_status(config, tasks)))
+            return 0
 
     except NightShiftError as exc:
         print(str(exc), file=sys.stderr)

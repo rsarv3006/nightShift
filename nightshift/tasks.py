@@ -41,6 +41,13 @@ def parse_task_file(project_root: str | Path, task_file: str | Path) -> list[Tas
     return parse_tasks(path.read_text(encoding="utf-8"))
 
 
+def task_file_path(project_root: str | Path, task_file: str | Path) -> Path:
+    try:
+        return resolve_inside_root(project_root, task_file, "task file")
+    except SafetyError as exc:
+        raise TaskError(str(exc)) from exc
+
+
 def parse_tasks(markdown: str) -> list[Task]:
     """Parse NightShift's documented markdown checklist task format."""
 
@@ -114,6 +121,24 @@ def select_next_incomplete_task(tasks: list[Task] | tuple[Task, ...]) -> Task:
     raise TaskError("Task error: no incomplete tasks found.")
 
 
+def select_next_runnable_task(tasks: list[Task] | tuple[Task, ...]) -> Task:
+    """Return the first incomplete task whose dependencies are complete."""
+
+    completed = {task.id for task in tasks if task.completed}
+    blocked: list[str] = []
+    for task in tasks:
+        if task.completed:
+            continue
+        missing = [dependency for dependency in task.dependencies if dependency not in completed]
+        if missing:
+            blocked.append(f"{task.id} blocked by {', '.join(missing)}")
+            continue
+        return task
+    if blocked:
+        raise TaskError("Task error: no runnable incomplete tasks. " + "; ".join(blocked))
+    raise TaskError("Task error: no incomplete tasks found.")
+
+
 def select_task_by_id(tasks: list[Task] | tuple[Task, ...], task_id: str) -> Task:
     """Return a task by id."""
 
@@ -122,6 +147,58 @@ def select_task_by_id(tasks: list[Task] | tuple[Task, ...], task_id: str) -> Tas
             return task
     available = ", ".join(task.id for task in tasks) or "<none>"
     raise TaskError(f"Task error: unknown task id '{task_id}'. Available tasks: {available}.")
+
+
+def ensure_dependencies_satisfied(tasks: list[Task] | tuple[Task, ...], task: Task) -> None:
+    task_ids = {candidate.id for candidate in tasks}
+    completed = {candidate.id for candidate in tasks if candidate.completed}
+    missing_refs = [dependency for dependency in task.dependencies if dependency not in task_ids]
+    if missing_refs:
+        raise TaskError(
+            f"Task error: task '{task.id}' references missing dependencies: "
+            f"{', '.join(missing_refs)}."
+        )
+    incomplete = [dependency for dependency in task.dependencies if dependency not in completed]
+    if incomplete:
+        raise TaskError(
+            f"Task error: task '{task.id}' is blocked by incomplete dependencies: "
+            f"{', '.join(incomplete)}."
+        )
+
+
+def dependency_problems(tasks: list[Task] | tuple[Task, ...]) -> list[str]:
+    task_ids = {task.id for task in tasks}
+    problems: list[str] = []
+    for task in tasks:
+        for dependency in task.dependencies:
+            if dependency not in task_ids:
+                problems.append(f"Task '{task.id}' references missing dependency '{dependency}'.")
+    problems.extend(_cycle_problems(tasks))
+    return problems
+
+
+def validate_task_dependencies(tasks: list[Task] | tuple[Task, ...]) -> None:
+    problems = dependency_problems(tasks)
+    if problems:
+        raise TaskError("Task dependency error: " + " ".join(problems))
+
+
+def mark_task_completed(project_root: str | Path, task_file: str | Path, task_id: str) -> bool:
+    """Mark a task complete in the markdown task file with a minimal line edit."""
+
+    path = task_file_path(project_root, task_file)
+    if not path.exists():
+        raise TaskError(f"Task error: task file does not exist: {path}")
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        match = TASK_HEADER_RE.match(line.rstrip("\r\n"))
+        if match and match.group("id") == task_id:
+            if match.group("mark").lower() == "x":
+                return False
+            lines[index] = re.sub(r"\[[ ]\]", "[x]", line, count=1)
+            path.write_text("".join(lines), encoding="utf-8")
+            return True
+    raise TaskError(f"Task error: cannot mark unknown task complete: {task_id}.")
 
 
 def _extract_section(block: list[str], section_name: str) -> str:
@@ -161,3 +238,28 @@ def _find_section_index(block: list[str], section_name: str) -> int | None:
         if line.strip().lower() == expected:
             return index
     return None
+
+
+def _cycle_problems(tasks: list[Task] | tuple[Task, ...]) -> list[str]:
+    graph = {task.id: tuple(dep for dep in task.dependencies if dep in {item.id for item in tasks}) for task in tasks}
+    visiting: set[str] = set()
+    visited: set[str] = set()
+    problems: list[str] = []
+
+    def visit(task_id: str, path: list[str]) -> None:
+        if task_id in visited:
+            return
+        if task_id in visiting:
+            cycle_start = path.index(task_id) if task_id in path else 0
+            cycle = " -> ".join(path[cycle_start:] + [task_id])
+            problems.append(f"Dependency cycle detected: {cycle}.")
+            return
+        visiting.add(task_id)
+        for dependency in graph.get(task_id, ()):
+            visit(dependency, path + [dependency])
+        visiting.remove(task_id)
+        visited.add(task_id)
+
+    for task_id in graph:
+        visit(task_id, [task_id])
+    return problems
