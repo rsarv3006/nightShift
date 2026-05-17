@@ -11,6 +11,7 @@ from .commands import CommandExecutor
 from .config import COMMAND_STAGE_TYPES, NightShiftConfig, StageConfig
 from .context import ContextManager
 from .errors import PipelineError
+from .errors import NightShiftError
 from .reports import ReportGenerator
 from .stages import StageResult
 from .tasks import Task
@@ -72,7 +73,20 @@ class PipelineRunner:
 
         while index < len(stages):
             stage = stages[index]
-            result = self._run_stage(stage, task, previous_outputs, retry_notes)
+            try:
+                result = self._run_stage(stage, task, previous_outputs, retry_notes)
+            except NightShiftError as exc:
+                result = StageResult(
+                    stage_id=stage.id,
+                    status="fail",
+                    reason=str(exc),
+                )
+            except OSError as exc:
+                result = StageResult(
+                    stage_id=stage.id,
+                    status="fail",
+                    reason=f"Unexpected OS error while running stage: {exc}",
+                )
             stage_results.append(result)
             previous_outputs[stage.id] = self._read_output(result.output_path)
             if result.context_update:
@@ -203,4 +217,3 @@ def format_summary_stage(
             "",
         ]
     )
-

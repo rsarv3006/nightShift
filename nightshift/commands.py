@@ -112,8 +112,8 @@ class CommandExecutor:
             return CommandRun(
                 command=normalized,
                 exit_code=-1,
-                stdout=exc.stdout or "",
-                stderr=exc.stderr or "",
+                stdout=_coerce_output(exc.stdout),
+                stderr=_coerce_output(exc.stderr),
                 duration_seconds=duration,
                 timed_out=True,
             )
@@ -146,3 +146,11 @@ def format_command_runs(stage_id: str, runs: list[CommandRun]) -> str:
             ]
         )
     return "\n".join(lines)
+
+
+def _coerce_output(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value

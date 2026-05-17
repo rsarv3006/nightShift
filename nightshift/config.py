@@ -143,7 +143,10 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> NightShiftConfig:
 
     safety_raw = _require_mapping(raw["safety"], "safety")
     safety = SafetyConfig(
-        require_clean_worktree=bool(safety_raw.get("require_clean_worktree", False)),
+        require_clean_worktree=_optional_bool(
+            safety_raw.get("require_clean_worktree", False),
+            "safety.require_clean_worktree",
+        ),
         scoped_paths=_string_tuple(safety_raw.get("scoped_paths", []), "safety.scoped_paths"),
         allowed_commands=_string_tuple(safety_raw.get("allowed_commands", []), "safety.allowed_commands"),
         forbidden_commands=_string_tuple(
@@ -159,6 +162,15 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> NightShiftConfig:
         agent_raw = _require_mapping(agent_raw_value, f"agents.{agent_id}")
         backend = _require_string(agent_raw, "backend", f"agents.{agent_id}")
         command = _optional_string(agent_raw.get("command"), f"agents.{agent_id}.command")
+        if backend != "command":
+            raise ConfigError(
+                f"Config error: agent '{agent_id}' uses unsupported backend '{backend}'. "
+                "Supported backends: command."
+            )
+        if command is None:
+            raise ConfigError(
+                f"Config error: command backend agent '{agent_id}' must define command."
+            )
         system_prompt = Path(_require_string(agent_raw, "system_prompt", f"agents.{agent_id}"))
         agents[str(agent_id)] = AgentConfig(
             id=str(agent_id),
@@ -170,7 +182,10 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> NightShiftConfig:
         )
 
     pipeline_raw = _require_mapping(raw["pipeline"], "pipeline")
-    max_task_retries = int(pipeline_raw.get("max_task_retries", 0))
+    max_task_retries = _optional_int(
+        pipeline_raw.get("max_task_retries", 0),
+        "pipeline.max_task_retries",
+    )
     if max_task_retries < 0:
         raise ConfigError("Config error: pipeline.max_task_retries must be zero or greater.")
 
@@ -211,6 +226,10 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> NightShiftConfig:
 
         if stage_type in COMMAND_STAGE_TYPES and not commands:
             raise ConfigError(f"Config error: command stage '{stage_id}' must define commands.")
+        if stage_type not in COMMAND_STAGE_TYPES and commands:
+            raise ConfigError(
+                f"Config error: non-command stage '{stage_id}' must not define commands."
+            )
 
         stages.append(
             StageConfig(
@@ -246,7 +265,10 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
     except ModuleNotFoundError:
         data = _parse_simple_yaml(text)
     else:
-        data = yaml.safe_load(text)
+        try:
+            data = yaml.safe_load(text)
+        except yaml.YAMLError as exc:  # type: ignore[attr-defined]
+            raise ConfigError(f"Config error: invalid YAML in {path}: {exc}") from exc
 
     if data is None:
         data = {}
@@ -396,6 +418,18 @@ def _optional_string(value: Any, context: str) -> str | None:
         return None
     if not isinstance(value, str) or not value:
         raise ConfigError(f"Config error: '{context}' must be a non-empty string when set.")
+    return value
+
+
+def _optional_bool(value: Any, context: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    raise ConfigError(f"Config error: '{context}' must be a boolean.")
+
+
+def _optional_int(value: Any, context: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ConfigError(f"Config error: '{context}' must be an integer.")
     return value
 
 

@@ -159,8 +159,8 @@ class AgentExecutor:
                 command=agent.command,
                 prompt=prompt,
                 exit_code=-1,
-                stdout=exc.stdout or "",
-                stderr=exc.stderr or "",
+                stdout=_coerce_output(exc.stdout),
+                stderr=_coerce_output(exc.stderr),
                 duration_seconds=duration,
                 timed_out=True,
             )
@@ -223,6 +223,14 @@ def build_prompt_bundle(
             "",
         ]
     )
+
+
+def _coerce_output(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def output_contract_for(stage: StageConfig) -> str:

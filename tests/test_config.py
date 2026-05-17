@@ -79,6 +79,72 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "not allowlisted"):
                 validate_config(config_path)
 
+    def test_max_task_retries_must_be_integer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            init_project(root)
+            config_path = root / "nightshift.yaml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8").replace(
+                    "max_task_retries: 3",
+                    "max_task_retries: three",
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ConfigError, "pipeline.max_task_retries"):
+                load_config(config_path)
+
+    def test_require_clean_worktree_must_be_boolean(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            init_project(root)
+            config_path = root / "nightshift.yaml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8").replace(
+                    "require_clean_worktree: false",
+                    "require_clean_worktree: no-thanks",
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ConfigError, "safety.require_clean_worktree"):
+                load_config(config_path)
+
+    def test_command_backend_agent_requires_command(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            init_project(root)
+            config_path = root / "nightshift.yaml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8").replace(
+                    "    command: echo\n    system_prompt: agents/planner.md",
+                    "    system_prompt: agents/planner.md",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ConfigError, "must define command"):
+                load_config(config_path)
+
+    def test_non_command_stage_cannot_define_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            init_project(root)
+            config_path = root / "nightshift.yaml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8").replace(
+                    "      output: plan.md",
+                    "      output: plan.md\n      commands:\n        - python -m unittest",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ConfigError, "non-command stage 'plan'"):
+                load_config(config_path)
+
 
 if __name__ == "__main__":
     unittest.main()

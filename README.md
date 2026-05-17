@@ -1,5 +1,7 @@
 # NightShift
 
+![NightShift logo](docs/images/logo.png)
+
 Auditable local-first AI coding pipelines.
 
 NightShift is a deterministic pipeline runner for long-running AI-assisted coding workflows. It runs one markdown task at a time through a declarative YAML pipeline, records the important artifacts, and leaves the user with a reviewable work package.

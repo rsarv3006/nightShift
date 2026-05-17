@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import shutil
+import re
 
 from .config import NightShiftConfig
 from .errors import ArtifactError, SafetyError
@@ -32,7 +33,7 @@ class ArtifactStore:
         except SafetyError as exc:
             raise ArtifactError(str(exc)) from exc
 
-        self.run_id = run_id or default_run_id()
+        self.run_id = _safe_artifact_segment(run_id or default_run_id(), "run id")
         self.run_dir = self._artifact_path("runs", self.run_id)
         self.tasks_dir = self.run_dir / "tasks"
         self.project_context_path = self.artifact_root / "project-context.md"
@@ -71,10 +72,11 @@ class ArtifactStore:
         """Create the artifact directory for one task."""
 
         self.initialize_run()
-        task_dir = self._artifact_path("runs", self.run_id, "tasks", task_id)
+        safe_task_id = _safe_artifact_segment(task_id, "task id")
+        task_dir = self._artifact_path("runs", self.run_id, "tasks", safe_task_id)
         task_dir.mkdir(parents=True, exist_ok=True)
         return TaskArtifactPaths(
-            task_id=task_id,
+            task_id=safe_task_id,
             directory=task_dir,
             task_snapshot=task_dir / "task.md",
         )
@@ -122,3 +124,15 @@ def default_run_id(now: datetime | None = None) -> str:
 
     value = now or datetime.now(timezone.utc)
     return value.strftime("%Y%m%dT%H%M%SZ")
+
+
+def _safe_artifact_segment(value: str, context: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ArtifactError(f"Artifact error: {context} must be a non-empty string.")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", value):
+        raise ArtifactError(
+            f"Artifact error: {context} contains unsafe characters: {value}"
+        )
+    if value in {".", ".."}:
+        raise ArtifactError(f"Artifact error: {context} cannot be '{value}'.")
+    return value

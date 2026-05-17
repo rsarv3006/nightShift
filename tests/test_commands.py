@@ -89,6 +89,36 @@ class CommandExecutorTests(unittest.TestCase):
             with self.assertRaisesRegex(CommandError, "not allowlisted"):
                 executor.run_command(FAILING_COMMAND)
 
+    def test_command_timeout_returns_failed_stage_and_writes_output(self) -> None:
+        slow_command = 'python -c "import time; print(\'start\'); time.sleep(2)"'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifacts = ArtifactStore(root, ".nightshift", run_id="test-run")
+            executor = CommandExecutor(
+                root,
+                SafetyConfig(
+                    require_clean_worktree=False,
+                    scoped_paths=(".",),
+                    allowed_commands=(slow_command,),
+                    forbidden_commands=("rm -rf",),
+                ),
+                artifacts,
+                timeout_seconds=0.1,
+            )
+            stage = StageConfig(
+                id="test",
+                type="command",
+                commands=(slow_command,),
+                output="test-output.txt",
+            )
+
+            result = executor.run_stage(stage, "TASK-001")
+
+            self.assertEqual(result.status, "fail")
+            self.assertIn("timed out", result.reason)
+            output = (root / result.output_path).read_text(encoding="utf-8")
+            self.assertIn("Timed out: true", output)
+
 
 if __name__ == "__main__":
     unittest.main()

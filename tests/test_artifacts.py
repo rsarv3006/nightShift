@@ -51,6 +51,17 @@ class ArtifactStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ArtifactError, "escapes task directory"):
                 store.write_stage_output("TASK-001", "../leak.txt", "nope")
 
+    def test_run_id_and_task_id_must_be_safe_path_segments(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            with self.assertRaisesRegex(ArtifactError, "run id contains unsafe"):
+                ArtifactStore(root, ".nightshift", run_id="../run")
+
+            store = ArtifactStore(root, ".nightshift", run_id="safe-run")
+            with self.assertRaisesRegex(ArtifactError, "task id contains unsafe"):
+                store.create_task_dir("../TASK-001")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -126,6 +126,25 @@ class PipelineRunnerTests(unittest.TestCase):
             self.assertIn("Retry limit reached", result.reason)
             self.assertEqual([item.stage_id for item in result.stage_results], ["implement", "review", "implement", "review", "implement", "review"])
 
+    def test_stage_error_is_reported_as_failed_result(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_common_files(root)
+            stages = (
+                StageConfig(id="plan", type="agent", agent="planner", output="../bad.md"),
+            )
+            config = make_config(root, stages)
+            runner = PipelineRunner(config, ArtifactStore(root, ".nightshift", run_id="test-run"))
+            task = parse_tasks(TASK_MD)[0]
+
+            result = runner.run_task(task)
+
+            self.assertEqual(result.status, "failed")
+            self.assertEqual(result.stage_results[0].status, "fail")
+            self.assertTrue(
+                (root / ".nightshift" / "runs" / "test-run" / "tasks" / task.id / "final-notes.md").exists()
+            )
+
 
 def _write_common_files(root: Path) -> None:
     (root / "nightshift.yaml").write_text("project:\n  name: test\n", encoding="utf-8")
