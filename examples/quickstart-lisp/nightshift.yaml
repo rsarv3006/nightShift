@@ -22,7 +22,7 @@ experiment:
 agents:
   planner:
     backend: command
-    command: echo
+    command: python agents/fake_planner.py
     system_prompt: agents/planner.md
 
   implementer:
@@ -43,6 +43,10 @@ pipeline:
       type: agent
       agent: planner
       output: plan.md
+
+    - id: context
+      type: repo_context
+      output: context-pack.md
 
     - id: implement
       type: code_writer

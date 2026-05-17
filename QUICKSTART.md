@@ -1,6 +1,6 @@
 # NightShift Quickstart
 
-This guide runs the current MVP with safe example files.
+This guide runs NightShift with safe example files, including an end-to-end patch workflow.
 
 ## 1. Install for Development
 
@@ -67,9 +67,16 @@ Useful files:
 ```text
 run-summary.md
 config.snapshot.yaml
+project-context-chart.md
 tasks/TASK-001/task.md
 tasks/TASK-001/context.md
 tasks/TASK-001/plan.md
+tasks/TASK-001/context-pack.md
+tasks/TASK-001/proposed.patch
+tasks/TASK-001/normalized.patch
+tasks/TASK-001/patch-validation.md
+tasks/TASK-001/applied.patch
+tasks/TASK-001/patch-apply-output.txt
 tasks/TASK-001/test-output.txt
 tasks/TASK-001/stage-results.md
 tasks/TASK-001/context-out.md
@@ -87,7 +94,7 @@ The repository also includes a complete sample target project:
 examples/quickstart-lisp/
 ```
 
-Copy that directory elsewhere if you want to test NightShift against a multi-task project.
+Copy that directory elsewhere if you want to test NightShift against a multi-task project that modifies real code through patch mode.
 
 ## Quickstart Test Project
 
@@ -127,12 +134,12 @@ safety:
 agents:
   planner:
     backend: command
-    command: echo
+    command: python agents/fake_planner.py
     system_prompt: agents/planner.md
 
   implementer:
     backend: command
-    command: echo
+    command: python agents/fake_code_writer.py
     system_prompt: agents/implementer.md
 
   reviewer:
@@ -149,16 +156,34 @@ pipeline:
       agent: planner
       output: plan.md
 
+    - id: context
+      type: repo_context
+      output: context-pack.md
+
     - id: implement
-      type: agent
+      type: code_writer
       agent: implementer
-      output: implementation-log.md
+      output: proposed.patch
+
+    - id: normalize
+      type: patch_normalizer
+      output: normalized.patch
+
+    - id: validate_patch
+      type: patch_validator
+      output: patch-validation.md
+
+    - id: apply_patch
+      type: patch_apply
+      mode: apply
+      output: patch-apply-output.txt
 
     - id: test
       type: command
       commands:
         - python -m unittest discover -v
       output: test-output.txt
+      on_fail: implement
 
     - id: review
       type: agent_review
@@ -171,7 +196,7 @@ pipeline:
       output: final-notes.md
 ```
 
-This uses fake command agents so the pipeline is safe and deterministic. Replace `command: echo` later with your real local agent wrapper.
+This uses fake command-backed planner and code-writer fixtures so the pipeline is deterministic but still inspects files and modifies real files through patch mode. Replace the fake agent commands later with your real local agent wrapper.
 
 ### 3. Add `tasks.md`
 
@@ -242,9 +267,11 @@ Do not write code. Include files to edit, tests to add, and risks.
 `agents/implementer.md`:
 
 ```markdown
-You are the implementation agent. Implement the smallest correct change.
-Preserve existing behavior and include tests.
+You are the implementation agent. Output only a unified diff.
+Preserve existing behavior and include tests when needed.
 ```
+
+For deterministic local fixtures, add `agents/fake_planner.py` that requests file lookups and `agents/fake_code_writer.py` that prints a unified diff. The included `examples/quickstart-lisp/` project contains working fixtures.
 
 `agents/reviewer.md`:
 
@@ -288,7 +315,9 @@ Run all currently runnable tasks:
 nightshift run --all
 ```
 
-Because the example uses fake agents, it will not actually implement the Lisp interpreter by itself. It is meant to verify the pipeline, dependency handling, reports, and artifacts before you connect a real command-backed agent.
+The included `examples/quickstart-lisp/` fake code writer implements the first parser task by emitting a patch. It exercises lookup, context-pack generation, patch normalization, validation, application, tests, reports, and artifacts before you connect a real model-backed agent.
+
+Use `mode: dry_run` on the `patch_apply` stage when you want to verify that a patch would apply without changing files. Use `mode: apply` when the validated patch should be written to the target project.
 
 ### 7. Review Artifacts
 
@@ -297,10 +326,16 @@ After a run, inspect:
 ```text
 .nightshift/runs/<run-id>/run-summary.md
 .nightshift/runs/<run-id>/tasks/TASK-001/plan.md
-.nightshift/runs/<run-id>/tasks/TASK-001/implementation-log.md
+.nightshift/runs/<run-id>/tasks/TASK-001/files-inspected.md
+.nightshift/runs/<run-id>/tasks/TASK-001/context-pack.md
+.nightshift/runs/<run-id>/tasks/TASK-001/proposed.patch
+.nightshift/runs/<run-id>/tasks/TASK-001/normalized.patch
+.nightshift/runs/<run-id>/tasks/TASK-001/patch-validation.md
+.nightshift/runs/<run-id>/tasks/TASK-001/applied.patch
+.nightshift/runs/<run-id>/tasks/TASK-001/patch-apply-output.txt
 .nightshift/runs/<run-id>/tasks/TASK-001/test-output.txt
 .nightshift/runs/<run-id>/tasks/TASK-001/review.md
 .nightshift/runs/<run-id>/tasks/TASK-001/final-notes.md
 ```
 
-The useful signal is whether NightShift selected the right task, respected dependencies, ran the command stage, wrote artifacts, updated task completion, and produced a clear summary.
+The useful signal is whether NightShift selected the right task, respected dependencies, generated context, validated and applied a patch, ran tests, wrote artifacts, updated task completion, and produced a clear summary.

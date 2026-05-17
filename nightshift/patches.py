@@ -103,9 +103,9 @@ def format_validation_result(result: PatchValidationResult) -> str:
 
 def apply_patch_with_git(patch_path: Path, project_root: str | Path, mode: str = "dry_run") -> PatchApplyResult:
     root = resolve_project_root(project_root)
-    command = ["git", "apply", "--check", str(patch_path)]
+    command = ["git", "apply", "--ignore-whitespace", "--check", str(patch_path)]
     if mode == "apply":
-        command = ["git", "apply", str(patch_path)]
+        command = ["git", "apply", "--ignore-whitespace", str(patch_path)]
     completed = subprocess.run(
         command,
         cwd=root,

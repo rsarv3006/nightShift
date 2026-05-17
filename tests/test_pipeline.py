@@ -469,6 +469,7 @@ Acceptance Criteria:
                 ),
                 encoding="utf-8",
             )
+            test_command = 'python -c "from pathlib import Path; raise SystemExit(0 if Path(\'app.py\').read_text().strip() == \'new\' else 1)"'
             stages = (
                 StageConfig(id="write", type="code_writer", agent="writer"),
                 StageConfig(id="normalize", type="patch_normalizer"),
@@ -477,7 +478,7 @@ Acceptance Criteria:
                 StageConfig(
                     id="test",
                     type="command",
-                    commands=('python -c "from pathlib import Path; raise SystemExit(0 if Path(\'app.py\').read_text() == \'new\\\\n\' else 1)"',),
+                    commands=(test_command,),
                     output="test-output.txt",
                     on_fail="write",
                 ),
@@ -490,10 +491,10 @@ Acceptance Criteria:
             config = replace(
                 config,
                 safety=SafetyConfig(
-                require_clean_worktree=False,
-                scoped_paths=(".",),
-                allowed_commands=('python -c "from pathlib import Path; raise SystemExit(0 if Path(\'app.py\').read_text() == \'new\\\\n\' else 1)"',),
-                forbidden_commands=("rm -rf",),
+                    require_clean_worktree=False,
+                    scoped_paths=(".",),
+                    allowed_commands=(test_command,),
+                    forbidden_commands=("rm -rf",),
                 ),
             )
             config.agents["writer"] = AgentConfig(

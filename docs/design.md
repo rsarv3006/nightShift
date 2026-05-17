@@ -1086,27 +1086,27 @@ Notes:
 
 ## Phase 32: Patch Apply / Dry Run
 
-- [ ] Add `patch_apply` stage.
-- [ ] Support `mode: dry_run`.
-- [ ] Support `mode: apply`.
-- [ ] Save `applied.patch`.
-- [ ] Preserve pre/post git status.
-- [ ] Fail cleanly on apply errors.
+- [x] Add `patch_apply` stage.
+- [x] Support `mode: dry_run`.
+- [x] Support `mode: apply`.
+- [x] Save `applied.patch`.
+- [x] Preserve pre/post git status.
+- [x] Fail cleanly on apply errors.
 
 ## Phase 33: Test Feedback Repair Loop
 
-- [ ] Feed test/static failure output back into implementer.
-- [ ] Add bounded repair attempts.
-- [ ] Save each repair patch.
-- [ ] Save repair summaries.
-- [ ] Stop after max retry count.
+- [x] Feed test/static failure output back into implementer.
+- [x] Add bounded repair attempts.
+- [x] Save each repair patch.
+- [x] Save repair summaries.
+- [x] Stop after max retry count.
 
 ## Phase 34: End-to-End Coding Quickstart
 
-- [ ] Update quickstart to modify real code.
-- [ ] Include fake-agent test fixture.
-- [ ] Demonstrate lookup → context pack → patch → apply → test.
-- [ ] Document dry-run vs apply mode.
+- [x] Update quickstart to modify real code.
+- [x] Include fake-agent test fixture.
+- [x] Demonstrate lookup → context pack → patch → apply → test.
+- [x] Document dry-run vs apply mode.
 ---
 
 # Appendix A: Design Decisions and Rationale

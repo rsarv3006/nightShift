@@ -155,6 +155,8 @@ class PipelineRunner:
                     reason=f"Unexpected OS error while running stage: {exc}",
                 )
             stage_results.append(result)
+            if stage.id in previous_outputs:
+                del previous_outputs[stage.id]
             previous_outputs[stage.id] = self._read_output(result.output_path)
             self.logger.event(
                 "stage.finish",
