@@ -140,35 +140,24 @@ Create a local integration sandbox from the NightShift repository root:
 python -m nightshift.cli integ-run --template tutorial-pastebin
 ```
 
-Then enter the generated project:
+Set up the generated Python project:
 
 ```bash
-cd integ_runs/<timestamp>/project
+python -m nightshift.cli integ-setup --project integ_runs/<timestamp>/project
 ```
 
-Activate the sandbox virtual environment and install target dependencies.
+The setup helper:
 
-PowerShell:
+- finds or creates the integration virtual environment
+- installs this NightShift checkout into that venv
+- installs the target project with `pip install -e`
+- installs extra packages, defaulting to `pytest`
+- runs `nightshift validate` unless `--skip-validate` is set
 
-```powershell
-..\.venv\Scripts\Activate.ps1
-python -m pip install -e ..\..\..
-python -m pip install -e . pytest flask
-```
-
-Bash:
+Preview commands without running them:
 
 ```bash
-source ../.venv/bin/activate
-python -m pip install -e ../../..
-python -m pip install -e . pytest flask
-```
-
-Run NightShift inside the generated `project/` directory:
-
-```bash
-python -m nightshift.cli validate
-python -m nightshift.cli run --task TASK-001
+python -m nightshift.cli integ-setup --project integ_runs/<timestamp>/project --dry-run
 ```
 
 To clean up old sandboxes before creating a new one, keep only the newest three existing runs:

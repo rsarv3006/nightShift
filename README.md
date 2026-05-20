@@ -131,29 +131,24 @@ Create an isolated integration sandbox for a template:
 
 ```bash
 python -m nightshift.cli integ-run --template tutorial-pastebin
-cd integ_runs/<timestamp>/project
 ```
 
-Activate the generated virtual environment, then install and run the project.
+Then run the Python project setup helper. It finds the generated venv, installs this NightShift checkout into it, installs the target project, installs pytest by default, and runs `nightshift validate`:
 
-PowerShell:
+```bash
+python -m nightshift.cli integ-setup --project integ_runs/<timestamp>/project
+```
+
+After setup, run from the generated project with the venv Python:
 
 ```powershell
-..\.venv\Scripts\Activate.ps1
-python -m pip install -e ..\..\..
-python -m pip install -e . pytest flask
-python -m nightshift.cli validate
-python -m nightshift.cli run --task TASK-001
+integ_runs\<timestamp>\.venv\Scripts\python.exe -m nightshift.cli run --task TASK-001
 ```
 
 Bash:
 
 ```bash
-source ../.venv/bin/activate
-python -m pip install -e ../../..
-python -m pip install -e . pytest flask
-python -m nightshift.cli validate
-python -m nightshift.cli run --task TASK-001
+integ_runs/<timestamp>/.venv/bin/python -m nightshift.cli run --task TASK-001
 ```
 
 Open the read-only artifact dashboard:

@@ -17,23 +17,12 @@ For an isolated local integration run, use the integration sandbox command from 
 
 ```bash
 python -m nightshift.cli integ-run --template tutorial-pastebin
-cd integ_runs/<timestamp>/project
 ```
 
-Activate the generated virtual environment.
-
-PowerShell:
-
-```powershell
-..\.venv\Scripts\Activate.ps1
-python -m pip install -e ..\..\..
-```
-
-Bash:
+Then set up the generated Python project:
 
 ```bash
-source ../.venv/bin/activate
-python -m pip install -e ../../..
+python -m nightshift.cli integ-setup --project integ_runs/<timestamp>/project
 ```
 
 The template creates:

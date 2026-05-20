@@ -10,6 +10,7 @@ from .config import validate_config
 from .errors import NightShiftError
 from .init import available_templates, init_project
 from .integ import create_integration_run
+from .integ_setup import format_setup_result, setup_python_project
 from .pipeline import PipelineRunner
 from .runlog import RunLogger
 from .status import build_status, format_status
@@ -21,12 +22,13 @@ from .tasks import (
     select_task_by_id,
     validate_task_dependencies,
 )
+from .version import display_version
 from .web import create_app
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nightshift", description="Auditable AI pipeline runner.")
-    parser.add_argument("--version", action="version", version="nightshift 0.1.0")
+    parser.add_argument("--version", action="version", version=f"nightshift {display_version()}")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -65,6 +67,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="Template to initialize inside the sandbox.",
     )
     integ_parser.add_argument("--keep", type=int, help="Keep only the newest N old integration runs before creating a new one.")
+
+    setup_parser = subparsers.add_parser(
+        "integ-setup",
+        help="Set up a Python integration project venv and dependencies.",
+    )
+    setup_parser.add_argument(
+        "--project",
+        default=".",
+        help="Generated project directory. Defaults to the current directory.",
+    )
+    setup_parser.add_argument(
+        "--nightshift-root",
+        help="NightShift checkout to install into the integration venv. Defaults to this checkout.",
+    )
+    setup_parser.add_argument(
+        "--extra",
+        action="append",
+        default=["pytest"],
+        help="Extra package to install into the venv. May be repeated. Defaults to pytest.",
+    )
+    setup_parser.add_argument(
+        "--no-create-venv",
+        action="store_true",
+        help="Fail instead of creating a missing virtual environment.",
+    )
+    setup_parser.add_argument(
+        "--skip-validate",
+        action="store_true",
+        help="Skip `nightshift validate` after installation.",
+    )
+    setup_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print setup commands without running them.",
+    )
 
     return parser
 
@@ -138,6 +175,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Integration run: {run.directory}")
             print(f"Venv: {run.venv_dir}")
             print(f"Log: {run.log_path}")
+            print(f"Setup: python -m nightshift.cli integ-setup --project {run.directory / 'project'}")
+            return 0
+
+        if args.command == "integ-setup":
+            result = setup_python_project(
+                args.project,
+                nightshift_root=args.nightshift_root,
+                extras=tuple(args.extra or ()),
+                create_venv=not args.no_create_venv,
+                validate=not args.skip_validate,
+                dry_run=args.dry_run,
+            )
+            print(format_setup_result(result))
             return 0
 
     except NightShiftError as exc:

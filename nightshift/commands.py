@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 import time
 
 from .artifacts import ArtifactStore
@@ -137,11 +138,7 @@ class CommandExecutor:
                 raise CommandError(str(exc)) from exc
         timeout = timeout_seconds or self.timeout_seconds
         args: str | list[str] = normalized if shell else shlex.split(normalized)
-        env = None
-        if self.safety.allowed_env:
-            env = {name: os.environ[name] for name in self.safety.allowed_env if name in os.environ}
-            if "PATH" in os.environ:
-                env.setdefault("PATH", os.environ["PATH"])
+        env = _command_env(self.safety.allowed_env)
 
         started = time.monotonic()
         process = subprocess.Popen(
@@ -219,6 +216,18 @@ def _coerce_output(value: str | bytes | None) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return value
+
+
+def _command_env(allowed_env: tuple[str, ...]) -> dict[str, str]:
+    env = dict(os.environ) if not allowed_env else {
+        name: os.environ[name] for name in allowed_env if name in os.environ
+    }
+    python_dir = str(Path(sys.executable).resolve().parent)
+    current_path = env.get("PATH") or os.environ.get("PATH", "")
+    path_parts = [part for part in current_path.split(os.pathsep) if part]
+    env["PATH"] = os.pathsep.join([python_dir, *[part for part in path_parts if part != python_dir]])
+    env.setdefault("VIRTUAL_ENV", os.environ.get("VIRTUAL_ENV", ""))
+    return env
 
 
 def _kill_process_tree(process: subprocess.Popen[str]) -> None:

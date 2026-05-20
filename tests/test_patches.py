@@ -254,6 +254,30 @@ two
             with self.assertRaisesRegex(PipelineError, "duplicate file block"):
                 generate_patch_from_file_updates(updates, root, safety)
 
+    def test_file_updates_allow_identical_duplicate_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "app.py").write_text("old\n", encoding="utf-8")
+            safety = SafetyConfig(
+                require_clean_worktree=False,
+                scoped_paths=(".",),
+                allowed_commands=(),
+                forbidden_commands=(),
+            )
+            updates = parse_file_updates(
+                """```file:app.py
+new
+```
+```file:app.py
+new
+```
+"""
+            )
+
+            patch = generate_patch_from_file_updates(updates, root, safety)
+
+            self.assertEqual(patch.count("diff --git a/app.py b/app.py"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

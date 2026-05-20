@@ -1,3 +1,5 @@
 """NightShift package."""
 
-__version__ = "0.1.0"
+from .version import __version__, display_version
+
+__all__ = ["__version__", "display_version"]

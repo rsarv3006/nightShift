@@ -308,6 +308,38 @@ Acceptance Criteria:
             self.assertIn("Context Pack", pack.read_text(encoding="utf-8"))
             self.assertIn("app.py", pack.read_text(encoding="utf-8"))
 
+    def test_repo_context_stage_respects_scoped_paths_without_project_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_common_files(root)
+            (root / "src").mkdir()
+            (root / "tests").mkdir()
+            (root / "src" / "app.py").write_text("def create_snippet():\n    return True\n", encoding="utf-8")
+            (root / "tests" / "test_app.py").write_text("def test_create_snippet():\n    assert True\n", encoding="utf-8")
+            stages = (StageConfig(id="context", type="repo_context", output="context-pack.md"),)
+            config = make_config(root, stages)
+            config = replace(
+                config,
+                safety=SafetyConfig(
+                    require_clean_worktree=False,
+                    scoped_paths=("src", "tests", "pyproject.toml", "README.md"),
+                    allowed_commands=config.safety.allowed_commands,
+                    forbidden_commands=config.safety.forbidden_commands,
+                ),
+            )
+            (root / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+            (root / "README.md").write_text("# Demo\n", encoding="utf-8")
+            runner = PipelineRunner(config, ArtifactStore(root, ".nightshift", run_id="test-run"))
+            task = parse_tasks(TASK_MD)[0]
+
+            result = runner.run_task(task)
+
+            pack = root / ".nightshift" / "runs" / "test-run" / "tasks" / task.id / "context-pack.md"
+            self.assertEqual(result.status, "complete")
+            content = pack.read_text(encoding="utf-8")
+            self.assertIn("src/app.py", content)
+            self.assertIn("tests/test_app.py", content)
+
     def test_project_context_chart_is_written_during_run(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -119,12 +119,14 @@ def generate_patch_from_file_updates(
     root = resolve_project_root(project_root)
     scoped_roots = validate_scoped_paths(root, safety.scoped_paths or (".",))
     patch_parts: list[str] = []
-    seen: set[str] = set()
+    seen: dict[str, str] = {}
     for update in updates:
         normalized_path = _normalize_update_path(update.path)
         if normalized_path in seen:
+            if seen[normalized_path] == update.content:
+                continue
             raise PipelineError(f"File writer error: duplicate file block `{normalized_path}`.")
-        seen.add(normalized_path)
+        seen[normalized_path] = update.content
         _validate_patch_path(normalized_path, root, scoped_roots, forbidden_paths)
         file_path = resolve_inside_root(root, normalized_path, f"file update '{normalized_path}'")
         old_text = file_path.read_text(encoding="utf-8", errors="replace") if file_path.exists() else ""

@@ -7,6 +7,7 @@ import sys
 from typing import TextIO
 import random
 
+from .version import display_version
 
 
 RESET = "\x1b[0m"
@@ -77,7 +78,7 @@ def format_banner(stream: TextIO | None = None) -> str:
        f"      [ {quote} ]",
         "      [ planner | implementer | verifier | audit ]",
         "",
-        "      VERSION: 0.1.0-alpha-glizzy",
+        f"      VERSION: {display_version()}",
         "-" * 50,
         "",
     ]

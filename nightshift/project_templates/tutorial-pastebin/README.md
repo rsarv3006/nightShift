@@ -12,26 +12,15 @@ Or create an isolated integration sandbox from the NightShift repository root:
 
 ```bash
 python -m nightshift.cli integ-run --template tutorial-pastebin
-cd integ_runs/<timestamp>/project
 ```
 
-Activate the generated virtual environment.
-
-PowerShell:
-
-```powershell
-..\.venv\Scripts\Activate.ps1
-python -m pip install -e ..\..\..
-```
-
-Bash:
+Then set up the generated Python project:
 
 ```bash
-source ../.venv/bin/activate
-python -m pip install -e ../../..
+python -m nightshift.cli integ-setup --project integ_runs/<timestamp>/project
 ```
 
-Install target dependencies:
+For a normal non-integration checkout, install target dependencies:
 
 ```bash
 python -m pip install -e . pytest flask

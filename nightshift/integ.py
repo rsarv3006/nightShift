@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import shutil
+import subprocess
 import venv
 
 from .init import init_project
@@ -37,6 +38,7 @@ def create_integration_run(root: Path, *, template: str = "basic", keep: int | N
     project_dir = run_dir / "project"
     project_dir.mkdir()
     init_project(project_dir, template=template)
+    _initialize_project_git_repo(project_dir)
     log_path = log_dir / "integ-run.log"
     log_path.write_text(
         "\n".join(
@@ -53,6 +55,21 @@ def create_integration_run(root: Path, *, template: str = "basic", keep: int | N
         encoding="utf-8",
     )
     return IntegrationRun(run_dir, venv_dir, log_path)
+
+
+def _initialize_project_git_repo(project_dir: Path) -> None:
+    try:
+        subprocess.run(
+            ["git", "init"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return
 
 
 def cleanup_integration_runs(base: Path, *, keep: int) -> tuple[Path, ...]:

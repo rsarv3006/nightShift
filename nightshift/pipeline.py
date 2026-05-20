@@ -1181,16 +1181,23 @@ class PipelineRunner:
 
     def _build_context_pack(self, task: Task) -> str:
         terms = _task_search_terms(task)
-        files = self.repo_tools.list_files(".", pattern="*.py", max_files=80)
+        lookup_paths = self.config.safety.scoped_paths or (".",)
+        files = self._list_context_files(lookup_paths)
         grep_sections: list[str] = []
         for term in terms[:5]:
+            scoped_results = []
+            for path in lookup_paths:
+                scoped_results.append(
+                    f"#### Path: {path}\n\n"
+                    "```text\n"
+                    f"{self.repo_tools.grep(re.escape(term), path, max_matches=20).rstrip()}\n"
+                    "```"
+                )
             grep_sections.extend(
                 [
                     f"### Search: {term}",
                     "",
-                    "```text",
-                    self.repo_tools.grep(re.escape(term), ".", max_matches=20),
-                    "```",
+                    *scoped_results,
                     "",
                 ]
             )
@@ -1222,6 +1229,18 @@ class PipelineRunner:
                 *grep_sections,
             ]
         )
+
+    def _list_context_files(self, paths: tuple[str, ...]) -> str:
+        sections: list[str] = []
+        for path in paths:
+            sections.extend(
+                [
+                    f"## Path: {path}",
+                    self.repo_tools.list_files(path, pattern="*", max_files=80).rstrip(),
+                    "",
+                ]
+            )
+        return "\n".join(sections).strip() or "No files found."
 
     def _read_output(self, output_path: str | None) -> str:
         if output_path is None:

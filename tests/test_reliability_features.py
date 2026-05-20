@@ -22,6 +22,20 @@ class ReliabilityFeatureTests(unittest.TestCase):
         self.assertIn("flask", result.probable_root_cause)
         self.assertIn("do not retry", result.retry_recommendation)
 
+    def test_failure_classifier_prioritizes_module_not_found_in_pytest_import_error(self) -> None:
+        result = classify_failure(
+            "\n".join(
+                [
+                    "ImportError while importing test module 'tests/test_app.py'.",
+                    "ModuleNotFoundError: No module named 'pastebin_app'",
+                ]
+            ),
+            exit_code=2,
+        )
+
+        self.assertEqual(result.category, "missing dependency")
+        self.assertIn("pastebin_app", result.probable_root_cause)
+
     def test_command_failure_writes_diagnostics_and_retry_memory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

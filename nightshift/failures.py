@@ -35,15 +35,6 @@ def classify_failure(output: str, exit_code: int | None = None, modified_files: 
     lowered = text.lower()
     failing_tests = extract_failing_tests(text)
 
-    if re.search(r"\b(syntaxerror|indentationerror|importerror)\b", text, re.IGNORECASE):
-        return FailureClassification(
-            "syntax/import error",
-            "Python failed while parsing or importing code.",
-            0.86,
-            "Send the failure excerpt and touched files back to the implementer.",
-            "retry implementation",
-            failing_tests,
-        )
     missing = re.search(r"No module named ['\"]([^'\"]+)['\"]", text, re.IGNORECASE)
     if not missing:
         missing = re.search(r"ModuleNotFoundError:\s*['\"]?([A-Za-z0-9_.-]+)", text, re.IGNORECASE)
@@ -55,6 +46,15 @@ def classify_failure(output: str, exit_code: int | None = None, modified_files: 
             0.91,
             "Run dependency diagnostics before another implementation retry.",
             "do not retry implementation until dependency is resolved",
+            failing_tests,
+        )
+    if re.search(r"\b(syntaxerror|indentationerror|importerror)\b", text, re.IGNORECASE):
+        return FailureClassification(
+            "syntax/import error",
+            "Python failed while parsing or importing code.",
+            0.86,
+            "Send the failure excerpt and touched files back to the implementer.",
+            "retry implementation",
             failing_tests,
         )
     if any(marker in lowered for marker in ("filenotfounderror", "no such file or directory", "missing fixture", "fixture")):

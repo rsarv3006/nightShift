@@ -5,8 +5,10 @@ import unittest
 from nightshift.artifacts import ArtifactStore
 from nightshift.commands import CommandExecutor
 from nightshift.commands import CommandRun, format_command_runs
+from nightshift.commands import _command_env
 from nightshift.config import SafetyConfig, StageConfig
 from nightshift.errors import CommandError
+import sys
 
 
 PASSING_COMMAND = 'python -c "print(\'ok\')"'
@@ -167,6 +169,12 @@ class CommandExecutorTests(unittest.TestCase):
 
         self.assertIn("Command: `cmd`", output)
         self.assertIn("### stderr", output)
+
+    def test_command_env_prefers_current_python_directory(self) -> None:
+        env = _command_env(())
+
+        first_path = env["PATH"].split(";")[0] if ";" in env["PATH"] else env["PATH"].split(":")[0]
+        self.assertEqual(Path(first_path), Path(sys.executable).resolve().parent)
 
 
 if __name__ == "__main__":
