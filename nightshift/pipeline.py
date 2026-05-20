@@ -429,7 +429,7 @@ class PipelineRunner:
                 )
             return result
         if stage.type in COMMAND_STAGE_TYPES:
-            return self.command_executor.run_stage(stage, task.id)
+            return self.command_executor.run_stage(_stage_with_attempt_output(stage, retry_count), task.id)
         if stage.type == "code_writer":
             return self._run_code_writer_stage(stage, task, previous_outputs, retry_notes, retry_count)
         if stage.type == "file_writer":
@@ -1381,6 +1381,13 @@ def _attempt_filename(filename: str, retry_count: int) -> str:
     else:
         name = f"{path.name}-{retry_count}"
     return path.with_name(name).as_posix()
+
+
+def _stage_with_attempt_output(stage: StageConfig, retry_count: int) -> StageConfig:
+    if retry_count <= 0:
+        return stage
+    output = _attempt_filename(stage.output or f"{stage.id}-output.txt", retry_count)
+    return replace(stage, output=output)
 
 
 def _extract_exit_code(text: str) -> int | None:

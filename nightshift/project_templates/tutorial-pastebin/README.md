@@ -14,10 +14,22 @@ Or create an isolated integration sandbox from the NightShift repository root:
 python -m nightshift.cli integ-run --template tutorial-pastebin
 ```
 
+To create the sandbox and set it up in one step:
+
+```bash
+python -m nightshift.cli integ-run --template tutorial-pastebin --setup
+```
+
 Then set up the generated Python project:
 
 ```bash
 python -m nightshift.cli integ-setup --project integ_runs/<timestamp>/project
+```
+
+`integ-setup` cannot activate the venv for your current shell. In PowerShell, activate it manually if you want plain `python` and `nightshift` to use the integration venv:
+
+```powershell
+integ_runs\<timestamp>\.venv\Scripts\Activate.ps1
 ```
 
 For a normal non-integration checkout, install target dependencies:
@@ -31,6 +43,7 @@ Validate and run:
 ```bash
 nightshift validate
 nightshift run --task TASK-001
+nightshift what-happened
 ```
 
 When running from an integration sandbox, the same commands are run inside `integ_runs/<timestamp>/project`.

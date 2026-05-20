@@ -138,7 +138,7 @@ class CommandExecutor:
                 raise CommandError(str(exc)) from exc
         timeout = timeout_seconds or self.timeout_seconds
         args: str | list[str] = normalized if shell else shlex.split(normalized)
-        env = _command_env(self.safety.allowed_env)
+        env = _command_env(self.safety.allowed_env, project_root=self.project_root)
 
         started = time.monotonic()
         process = subprocess.Popen(
@@ -218,16 +218,39 @@ def _coerce_output(value: str | bytes | None) -> str:
     return value
 
 
-def _command_env(allowed_env: tuple[str, ...]) -> dict[str, str]:
+def _command_env(allowed_env: tuple[str, ...], project_root: Path | None = None) -> dict[str, str]:
     env = dict(os.environ) if not allowed_env else {
         name: os.environ[name] for name in allowed_env if name in os.environ
     }
-    python_dir = str(Path(sys.executable).resolve().parent)
+    venv_dir = _project_venv_dir(project_root) if project_root is not None else None
+    python_dir = str(_venv_scripts_dir(venv_dir) if venv_dir is not None else Path(sys.executable).resolve().parent)
     current_path = env.get("PATH") or os.environ.get("PATH", "")
     path_parts = [part for part in current_path.split(os.pathsep) if part]
     env["PATH"] = os.pathsep.join([python_dir, *[part for part in path_parts if part != python_dir]])
-    env.setdefault("VIRTUAL_ENV", os.environ.get("VIRTUAL_ENV", ""))
+    if venv_dir is not None:
+        env["VIRTUAL_ENV"] = str(venv_dir)
+    else:
+        env.setdefault("VIRTUAL_ENV", os.environ.get("VIRTUAL_ENV", ""))
     return env
+
+
+def _project_venv_dir(project_root: Path | None) -> Path | None:
+    if project_root is None:
+        return None
+    candidates = (project_root / ".venv", project_root.parent / ".venv")
+    for candidate in candidates:
+        if _venv_python(candidate).exists():
+            return candidate.resolve()
+    return None
+
+
+def _venv_scripts_dir(venv_dir: Path) -> Path:
+    return venv_dir / ("Scripts" if os.name == "nt" else "bin")
+
+
+def _venv_python(venv_dir: Path) -> Path:
+    executable = "python.exe" if os.name == "nt" else "python"
+    return _venv_scripts_dir(venv_dir) / executable
 
 
 def _kill_process_tree(process: subprocess.Popen[str]) -> None:

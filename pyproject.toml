@@ -21,3 +21,6 @@ include = ["nightshift*"]
 
 [tool.setuptools.package-data]
 nightshift = ["project_templates/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

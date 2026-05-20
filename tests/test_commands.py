@@ -176,6 +176,20 @@ class CommandExecutorTests(unittest.TestCase):
         first_path = env["PATH"].split(";")[0] if ";" in env["PATH"] else env["PATH"].split(":")[0]
         self.assertEqual(Path(first_path), Path(sys.executable).resolve().parent)
 
+    def test_command_env_prefers_project_venv_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / ".venv" / ("Scripts" if sys.platform == "win32" else "bin")
+            scripts.mkdir(parents=True)
+            executable = scripts / ("python.exe" if sys.platform == "win32" else "python")
+            executable.write_text("", encoding="utf-8")
+
+            env = _command_env((), project_root=root)
+
+            first_path = env["PATH"].split(";")[0] if ";" in env["PATH"] else env["PATH"].split(":")[0]
+            self.assertEqual(Path(first_path), scripts.resolve())
+            self.assertEqual(Path(env["VIRTUAL_ENV"]), (root / ".venv").resolve())
+
 
 if __name__ == "__main__":
     unittest.main()

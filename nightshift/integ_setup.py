@@ -97,6 +97,8 @@ def format_setup_result(result: IntegrationSetupResult) -> str:
             lines.append(f"- ({command.cwd}) {' '.join(command.args)}")
     else:
         lines.append("Setup complete.")
+        lines.append("Activate this venv in your current shell if you want plain `nightshift` and `python` to use it:")
+        lines.append(f"  {_activation_command(result.venv_dir)}")
         lines.append("Run from the project directory:")
         lines.append(f"  {result.python} -m nightshift.cli run --task TASK-001")
     return "\n".join(lines)
@@ -128,6 +130,12 @@ def _venv_python(venv_dir: Path) -> Path:
     if os.name == "nt":
         return venv_dir / "Scripts" / "python.exe"
     return venv_dir / "bin" / "python"
+
+
+def _activation_command(venv_dir: Path) -> str:
+    if os.name == "nt":
+        return f"{venv_dir / 'Scripts' / 'Activate.ps1'}"
+    return f"source {venv_dir / 'bin' / 'activate'}"
 
 
 def _default_nightshift_root() -> Path:

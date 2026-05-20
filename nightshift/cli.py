@@ -24,6 +24,7 @@ from .tasks import (
 )
 from .version import display_version
 from .web import create_app
+from .what_happened import build_what_happened
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,6 +61,14 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser = subparsers.add_parser("status", help="Inspect NightShift project status.")
     status_parser.add_argument("--config", default="nightshift.yaml", help="Config file to inspect.")
 
+    happened_parser = subparsers.add_parser(
+        "what-happened",
+        help="Explain the latest NightShift run from local artifacts.",
+    )
+    happened_parser.add_argument("--config", default="nightshift.yaml", help="Config file to inspect.")
+    happened_parser.add_argument("--run", default="latest", help="Run id to inspect. Defaults to latest.")
+    happened_parser.add_argument("--task", help="Task id to inspect. Defaults to the latest task artifact.")
+
     web_parser = subparsers.add_parser("web", help="Start a read-only artifact dashboard.")
     web_parser.add_argument("--config", default="nightshift.yaml", help="Config file to inspect.")
     web_parser.add_argument("--host", default="127.0.0.1", help="Host to bind.")
@@ -74,6 +83,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Template to initialize inside the sandbox.",
     )
     integ_parser.add_argument("--keep", type=int, help="Keep only the newest N old integration runs before creating a new one.")
+    integ_parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Run integ-setup for the generated Python project after creating the sandbox.",
+    )
+    integ_parser.add_argument(
+        "--setup-extra",
+        action="append",
+        default=["pytest"],
+        help="Extra package for --setup. May be repeated. Defaults to pytest.",
+    )
+    integ_parser.add_argument(
+        "--setup-skip-validate",
+        action="store_true",
+        help="Skip validation during --setup.",
+    )
+    integ_parser.add_argument(
+        "--setup-dry-run",
+        action="store_true",
+        help="Print --setup commands without running them.",
+    )
 
     setup_parser = subparsers.add_parser(
         "integ-setup",
@@ -181,6 +211,17 @@ def main(argv: list[str] | None = None) -> int:
             print(format_status(build_status(config, tasks)))
             return 0
 
+        if args.command == "what-happened":
+            config = validate_config(args.config)
+            report = build_what_happened(
+                config.project.root,
+                config.project.artifact_dir,
+                run_id=args.run,
+                task_id=args.task,
+            )
+            print(report.content)
+            return 0
+
         if args.command == "web":
             config = validate_config(args.config)
             app = create_app(config.project.root, config.project.artifact_dir)
@@ -193,6 +234,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Venv: {run.venv_dir}")
             print(f"Log: {run.log_path}")
             print(f"Setup: python -m nightshift.cli integ-setup --project {run.directory / 'project'}")
+            if args.setup:
+                result = setup_python_project(
+                    run.directory / "project",
+                    extras=tuple(args.setup_extra or ()),
+                    validate=not args.setup_skip_validate,
+                    dry_run=args.setup_dry_run,
+                )
+                print("")
+                print(format_setup_result(result))
             return 0
 
         if args.command == "integ-setup":

@@ -133,13 +133,25 @@ Create an isolated integration sandbox for a template:
 python -m nightshift.cli integ-run --template tutorial-pastebin
 ```
 
+To create the sandbox and run the Python setup immediately:
+
+```bash
+python -m nightshift.cli integ-run --template tutorial-pastebin --setup
+```
+
 Then run the Python project setup helper. It finds the generated venv, installs this NightShift checkout into it, installs the target project, installs pytest by default, and runs `nightshift validate`:
 
 ```bash
 python -m nightshift.cli integ-setup --project integ_runs/<timestamp>/project
 ```
 
-After setup, run from the generated project with the venv Python:
+`integ-setup` cannot activate the venv for your current shell. If you want plain `python` and `nightshift` to resolve to the integration venv in PowerShell, run:
+
+```powershell
+integ_runs\<timestamp>\.venv\Scripts\Activate.ps1
+```
+
+After setup, you can also run from the generated project with the explicit venv Python:
 
 ```powershell
 integ_runs\<timestamp>\.venv\Scripts\python.exe -m nightshift.cli run --task TASK-001
@@ -149,6 +161,12 @@ Bash:
 
 ```bash
 integ_runs/<timestamp>/.venv/bin/python -m nightshift.cli run --task TASK-001
+```
+
+After a run, explain the latest pass or failure from artifacts:
+
+```bash
+nightshift what-happened
 ```
 
 Open the read-only artifact dashboard:

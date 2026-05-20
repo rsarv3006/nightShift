@@ -19,10 +19,22 @@ For an isolated local integration run, use the integration sandbox command from 
 python -m nightshift.cli integ-run --template tutorial-pastebin
 ```
 
+To create the sandbox and set up the Python project immediately:
+
+```bash
+python -m nightshift.cli integ-run --template tutorial-pastebin --setup
+```
+
 Then set up the generated Python project:
 
 ```bash
 python -m nightshift.cli integ-setup --project integ_runs/<timestamp>/project
+```
+
+`integ-setup` cannot activate the venv for your current shell. In PowerShell, activate it manually if you want plain `python` and `nightshift` to use the integration venv:
+
+```powershell
+integ_runs\<timestamp>\.venv\Scripts\Activate.ps1
 ```
 
 The template creates:
@@ -95,6 +107,7 @@ Run one task first:
 ```bash
 python -m nightshift.cli validate
 python -m nightshift.cli run --task TASK-001
+python -m nightshift.cli what-happened
 ```
 
 Then inspect:
