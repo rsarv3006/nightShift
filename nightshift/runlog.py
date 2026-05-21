@@ -12,6 +12,7 @@ from .terminal import format_console_event_line, format_plain_event_line
 
 
 ConsoleWriter = Callable[[str], None]
+StatusWriter = Callable[[str], None]
 
 
 @dataclass(frozen=True)
@@ -24,8 +25,9 @@ class LogEvent:
 class RunLogger:
     """Write concise operational events to CLI and run log artifacts."""
 
-    def __init__(self, console: ConsoleWriter | None = None) -> None:
+    def __init__(self, console: ConsoleWriter | None = None, status: StatusWriter | None = None) -> None:
         self.console = console
+        self.status = status
         self._run_log_path: Path | None = None
         self._aggregate_log_path: Path | None = None
         self._initialized_run_logs: set[Path] = set()
@@ -45,6 +47,10 @@ class RunLogger:
         line = format_plain_event_line(timestamp, event, message, safe_fields)
         if self.console is not None:
             self.console(format_console_event_line(timestamp, event, message, safe_fields))
+        if self.status is not None:
+            status_message = format_status_event_message(event, message, safe_fields)
+            if status_message:
+                self.status(status_message)
         for path in (self._run_log_path,):
             if path is None:
                 continue
@@ -67,6 +73,39 @@ class NullRunLogger(RunLogger):
 def format_log_line(log_event: LogEvent) -> str:
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return format_plain_event_line(timestamp, log_event.event, log_event.message, log_event.fields)
+
+
+def format_status_event_message(event: str, message: str, fields: dict[str, object]) -> str | None:
+    task_id = str(fields.get("task_id", "") or "")
+    retry = fields.get("retry_count")
+    retry_text = f" retry {retry}" if retry not in (None, "") else ""
+    stage_id = str(fields.get("stage_id", "") or "")
+    stage_type = str(fields.get("stage_type", "") or "")
+    agent_id = str(fields.get("agent_id", "") or "")
+    model = str(fields.get("model", "") or "")
+    command = str(fields.get("command", "") or "")
+    status = str(fields.get("status", "") or "")
+    next_stage = str(fields.get("next_stage", "") or "")
+
+    prefix = f"Task: {task_id} | " if task_id else ""
+    if event == "task.start":
+        return f"Task: {task_id} | Starting" if task_id else "Starting task"
+    if event == "stage.start" and stage_id:
+        label = f"{stage_id} ({stage_type})" if stage_type else stage_id
+        return f"{prefix}Stage: {label}{retry_text}"
+    if event == "agent.start":
+        model_text = f" | Model: {model}" if model else ""
+        return f"{prefix}Agent: {agent_id or stage_id}{model_text}"
+    if event == "command.start":
+        return f"{prefix}Command: {command or stage_id}"
+    if event == "stage.retry":
+        return f"{prefix}Retrying after {stage_id} -> {next_stage}{retry_text}"
+    if event in {"stage.finish", "task.finish"} and status:
+        target = f"Stage: {stage_id}" if event == "stage.finish" and stage_id else "Task"
+        return f"{prefix}{target} {status}"
+    if event.endswith(".start"):
+        return f"{prefix}{message}"
+    return None
 
 
 def tail_lines(path: Path, limit: int = 100) -> list[str]:

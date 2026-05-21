@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from nightshift.artifacts import ArtifactStore
-from nightshift.runlog import RunLogger
+from nightshift.runlog import RunLogger, format_status_event_message
 from nightshift.terminal import (
     HOTDOG_ANIMATIONS,
     TerminalAnimation,
@@ -34,6 +34,7 @@ class TerminalStylingTests(unittest.TestCase):
     def test_animation_frames_fall_back_to_agent_thinking(self) -> None:
         self.assertEqual(animation_frames("missing"), tuple(HOTDOG_ANIMATIONS["agent_thinking"]))
         self.assertEqual(animation_frames("classic_dance"), tuple(HOTDOG_ANIMATIONS["classic_dance"]))
+        self.assertEqual(animation_frames("status_dots"), tuple(HOTDOG_ANIMATIONS["status_dots"]))
 
     def test_terminal_animation_is_disabled_for_non_tty(self) -> None:
         stream = StringIO()
@@ -83,6 +84,47 @@ class TerminalStylingTests(unittest.TestCase):
             self.assertIn("status=complete", run_log)
             self.assertNotIn("\x1b[", run_log)
             self.assertNotIn("abc", run_log)
+
+    def test_run_logger_status_callback_gets_compact_stage_message(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifacts = ArtifactStore(root, ".nightshift", run_id="test-run")
+            statuses: list[str] = []
+            logger = RunLogger(status=statuses.append)
+            logger.bind(artifacts)
+
+            logger.event(
+                "stage.start",
+                "Starting stage",
+                task_id="TASK-001",
+                stage_id="implement",
+                stage_type="file_writer",
+                retry_count=2,
+            )
+            logger.event(
+                "agent.start",
+                "Starting agent",
+                task_id="TASK-001",
+                agent_id="implementer",
+                model="qwen3-coder:30b",
+            )
+
+            self.assertEqual(statuses[0], "Task: TASK-001 | Stage: implement (file_writer) retry 2")
+            self.assertEqual(statuses[1], "Task: TASK-001 | Agent: implementer | Model: qwen3-coder:30b")
+
+    def test_format_status_event_message_reports_retries(self) -> None:
+        message = format_status_event_message(
+            "stage.retry",
+            "Redirecting after stage result",
+            {
+                "task_id": "TASK-001",
+                "stage_id": "test",
+                "next_stage": "implement",
+                "retry_count": 1,
+            },
+        )
+
+        self.assertEqual(message, "Task: TASK-001 | Retrying after test -> implement retry 1")
 
 
 if __name__ == "__main__":

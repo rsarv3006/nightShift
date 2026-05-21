@@ -44,6 +44,13 @@ BANNER_MESSAGES = [
 quote = random.choice(BANNER_MESSAGES)
 
 HOTDOG_ANIMATIONS = {
+    "status_dots": [
+        "[.  ]",
+        "[.. ]",
+        "[...]",
+        "[ ..]",
+        "[  .]",
+    ],
     "classic_dance": [
         "🌭",
         "ヽ(🌭)ﾉ",
@@ -158,6 +165,7 @@ class TerminalAnimation:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._width = 0
+        self._lock = threading.Lock()
 
     def __enter__(self) -> "TerminalAnimation":
         self.start()
@@ -180,11 +188,17 @@ class TerminalAnimation:
         self._clear()
         self._thread = None
 
+    def update_message(self, message: str) -> None:
+        with self._lock:
+            self.message = message
+
     def _run(self) -> None:
         index = 0
         while not self._stop.is_set():
             frame = self.frames[index % len(self.frames)]
-            text = f"{frame} {self.message}"
+            with self._lock:
+                message = self.message
+            text = f"{frame} | {message}"
             self._width = max(self._width, len(text))
             self.stream.write("\r" + text.ljust(self._width))
             self.stream.flush()

@@ -55,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--all", action="store_true", help="Run all runnable incomplete tasks.")
     run_parser.add_argument(
         "--animation",
-        default="agent_thinking",
+        default="status_dots",
         choices=tuple(sorted(HOTDOG_ANIMATIONS)),
         help="Terminal animation to show while the run is active.",
     )
@@ -210,13 +210,13 @@ def main(argv: list[str] | None = None) -> int:
             validate_task_dependencies(tasks)
             if args.all and args.task:
                 parser.error("run accepts either --all or --task, not both.")
-            runner = PipelineRunner(config, logger=RunLogger(console=print))
             if args.all:
                 with TerminalAnimation(
                     args.animation,
-                    message="NightShift running all tasks",
+                    message="Starting all tasks",
                     enabled=not args.no_animation,
-                ):
+                ) as animation:
+                    runner = PipelineRunner(config, logger=RunLogger(console=print, status=animation.update_message))
                     result = runner.run_tasks(tasks)
                 print(f"Status: {result.status}")
                 print(f"Tasks run: {len(result.task_results)}")
@@ -229,9 +229,10 @@ def main(argv: list[str] | None = None) -> int:
             ensure_dependencies_satisfied(tasks, task)
             with TerminalAnimation(
                 args.animation,
-                message=f"NightShift running {task.id}",
+                message=f"Task: {task.id} | Starting",
                 enabled=not args.no_animation,
-            ):
+            ) as animation:
+                runner = PipelineRunner(config, logger=RunLogger(console=print, status=animation.update_message))
                 result = runner.run_task(task)
             print(f"Task: {result.task_id}")
             print(style_text(f"Status: {result.status}", color=_status_color(result.status), bold=True))
