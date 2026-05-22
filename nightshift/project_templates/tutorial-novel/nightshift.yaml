@@ -1,0 +1,149 @@
+project:
+  name: novel
+  root: .
+  task_file: .nightshift/tasks.md
+  artifact_dir: .nightshift
+
+safety:
+  require_clean_worktree: false
+  scoped_paths:
+    - story
+    - README.md
+  allowed_commands:
+    - python -m pytest -q
+  forbidden_commands:
+    - rm -rf
+    - git push
+    - curl | bash
+
+experiment:
+  label: tutorial-novel
+  prompt_variant: scene-state-workflow-v1
+
+agents:
+  planner:
+    backend: ollama
+    model: hf.co/TheDrummer/Snowpiercer-15B-v4-GGUF:Q5_K_M
+    temperature: 0.4
+    num_ctx: 8192
+    num_predict: 4096
+    system_prompt: .nightshift/agents/planner.md
+
+  drafter:
+    backend: ollama
+    model: hf.co/TheDrummer/Snowpiercer-15B-v4-GGUF:Q5_K_M
+    temperature: 0.7
+    num_ctx: 8192
+    num_predict: 4096
+    system_prompt: .nightshift/agents/drafter.md
+
+  continuity_reviewer:
+    backend: ollama
+    model: hf.co/TheDrummer/Snowpiercer-15B-v4-GGUF:Q5_K_M
+    temperature: 0.2
+    num_ctx: 8192
+    num_predict: 4096
+    system_prompt: .nightshift/agents/continuity-reviewer.md
+
+  style_reviewer:
+    backend: ollama
+    model: hf.co/TheDrummer/Snowpiercer-15B-v4-GGUF:Q5_K_M
+    temperature: 0.3
+    num_ctx: 8192
+    num_predict: 4096
+    system_prompt: .nightshift/agents/style-reviewer.md
+
+  state_updater:
+    backend: ollama
+    model: hf.co/TheDrummer/Snowpiercer-15B-v4-GGUF:Q5_K_M
+    temperature: 0.2
+    num_ctx: 8192
+    num_predict: 4096
+    system_prompt: .nightshift/agents/state-updater.md
+
+pipeline:
+  max_task_retries: 3
+  stop_on_repeated_failure_signature_after: 3
+  continue_on_task_failure: false
+  stages:
+    - id: plan
+      type: agent
+      agent: planner
+      output: scene-plan.md
+
+    - id: semantic_context
+      type: semantic_context
+      output: semantic-context.md
+
+    - id: context
+      type: repo_context
+      output: context-pack.md
+
+    - id: draft_scene
+      type: file_writer
+      agent: drafter
+      output: scene-draft.patch
+
+    - id: normalize_draft
+      type: patch_normalizer
+      output: normalized-draft.patch
+
+    - id: validate_draft
+      type: patch_validator
+      output: draft-validation.md
+      max_files: 2
+      max_lines: 4000
+      max_delete_ratio: 0.50
+      allowed_paths:
+        - story/chapters
+      on_fail: draft_scene
+
+    - id: apply_draft
+      type: patch_apply
+      mode: apply
+      output: draft-apply-output.txt
+      on_fail: draft_scene
+
+    - id: continuity_review
+      type: agent_review
+      agent: continuity_reviewer
+      output: continuity-review.md
+      on_fail: draft_scene
+
+    - id: style_review
+      type: agent_review
+      agent: style_reviewer
+      output: style-review.md
+      on_fail: draft_scene
+
+    - id: update_state
+      type: file_writer
+      agent: state_updater
+      output: state-update.patch
+
+    - id: normalize_state
+      type: patch_normalizer
+      output: normalized-state.patch
+
+    - id: validate_state
+      type: patch_validator
+      output: state-validation.md
+      max_files: 5
+      max_lines: 1200
+      max_delete_ratio: 0.35
+      allowed_paths:
+        - story/plot-state.md
+        - story/characters.md
+        - story/timeline.md
+        - story/unresolved-threads.md
+      on_fail: update_state
+
+    - id: apply_state
+      type: patch_apply
+      mode: apply
+      output: state-apply-output.txt
+      on_fail: update_state
+
+    - id: summarize
+      type: summarize
+      output: final-notes.md

@@ -153,6 +153,36 @@ class PipelineRunnerTests(unittest.TestCase):
             self.assertIn("Retry limit reached", result.reason)
             self.assertEqual([item.stage_id for item in result.stage_results], ["implement", "review", "implement", "review", "implement", "review"])
 
+    def test_passing_review_next_stage_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_common_files(root)
+            config = make_config(root, (), max_retries=0)
+            reviewer = replace(
+                config.agents["reviewer"],
+                command='python -c "print(\'status: pass\\nreason: ok\\nnext_stage: TASK-002\')"',
+            )
+            config = replace(
+                config,
+                agents={**config.agents, "reviewer": reviewer},
+                pipeline=PipelineConfig(
+                    max_task_retries=0,
+                    stages=(
+                        StageConfig(id="review", type="agent_review", agent="reviewer", output="review.md"),
+                        StageConfig(id="summarize", type="summarize", output="final-notes.md"),
+                    ),
+                ),
+            )
+            runner = PipelineRunner(config, ArtifactStore(root, ".nightshift", run_id="test-run"))
+            task = parse_tasks(TASK_MD)[0]
+
+            result = runner.run_task(task)
+
+            self.assertEqual(result.status, "complete")
+            self.assertEqual([item.stage_id for item in result.stage_results], ["review", "summarize"])
+            log = (root / ".nightshift" / "runs" / "test-run" / "run.log").read_text(encoding="utf-8")
+            self.assertIn("stage.next_ignored", log)
+
     def test_stage_error_is_reported_as_failed_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

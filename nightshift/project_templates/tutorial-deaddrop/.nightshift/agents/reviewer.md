@@ -12,3 +12,5 @@ status: pass | fail | retry | escalate
 reason: <short explanation>
 next_stage: <optional stage id>
 context_update: <compact useful note>
+
+When `status: pass`, leave `next_stage` blank. Do not put task ids such as `TASK-002` in `next_stage`; `next_stage` is only for pipeline stage ids during retry/failure routing.

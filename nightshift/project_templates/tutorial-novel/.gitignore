@@ -1,0 +1,17 @@
+# Private story bible and generated prose for local writing projects.
+story/worldbuilding.md
+story/characters.md
+story/style-guide.md
+story/plot-state.md
+story/timeline.md
+story/unresolved-threads.md
+story/continuity-rules.md
+story/outline.md
+story/chapters/**/*.md
+story/chapters/*.md
+
+# NightShift artifacts.
+.nightshift/runs/
+.nightshift/project-context.md
+.nightshift/project-context-chart.md
+.nightshift/nightshift.log

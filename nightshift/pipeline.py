@@ -197,6 +197,17 @@ class PipelineRunner:
                 retry_notes.append(f"Context update from '{stage.id}': {result.context_update}")
 
             if result.status == "pass":
+                if stage.type in {"agent_review", "review"} and result.next_stage:
+                    self.logger.event(
+                        "stage.next_ignored",
+                        "Ignoring next_stage from passing review",
+                        run_id=self.artifacts.run_id,
+                        task_id=task.id,
+                        stage_id=stage.id,
+                        requested_next_stage=result.next_stage,
+                    )
+                    index += 1
+                    continue
                 if result.next_stage:
                     if result.next_stage not in stage_indexes:
                         final_status = "failed"

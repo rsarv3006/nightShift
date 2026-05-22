@@ -60,6 +60,7 @@ class InitProjectTests(unittest.TestCase):
         self.assertIn("real-simple", available_templates())
         self.assertIn("tutorial-imageboard", available_templates())
         self.assertIn("tutorial-deaddrop", available_templates())
+        self.assertIn("tutorial-novel", available_templates())
 
     def test_init_DeadDrop_template_creates_skeleton_and_qwen3_config(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -99,6 +100,29 @@ class InitProjectTests(unittest.TestCase):
             "nightshift init --template tutorial-deaddrop",
             (tutorial / "README.md").read_text(encoding="utf-8"),
         )
+
+    def test_init_novel_template_creates_story_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            init_project(root, template="tutorial-novel")
+
+            config = (root / "nightshift.yaml").read_text(encoding="utf-8")
+            gitignore = (root / ".gitignore").read_text(encoding="utf-8")
+            self.assertTrue((root / ".nightshift" / "tasks.md").exists())
+            self.assertTrue((root / ".nightshift" / "agents" / "drafter.md").exists())
+            self.assertTrue((root / ".nightshift" / "agents" / "state-updater.md").exists())
+            self.assertTrue((root / "STORY_FILES.md").exists())
+            self.assertTrue((root / "pyproject.toml").exists())
+            self.assertTrue((root / "story" / "worldbuilding.md").exists())
+            self.assertTrue((root / "story" / "characters.md").exists())
+            self.assertTrue((root / "story" / "plot-state.md").exists())
+            self.assertTrue((root / "story" / "chapters" / ".gitkeep").exists())
+            self.assertIn("type: file_writer", config)
+            self.assertIn("story/chapters", config)
+            self.assertIn("story/worldbuilding.md", gitignore)
+            self.assertIn("story/chapters/**/*.md", gitignore)
+            self.assertIn("Story File Guide", (root / "STORY_FILES.md").read_text(encoding="utf-8"))
 
     def test_init_rejects_unknown_template(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
