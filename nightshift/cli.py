@@ -243,6 +243,11 @@ def main(argv: list[str] | None = None) -> int:
             validate_task_dependencies(tasks)
             if args.all and args.task:
                 parser.error("run accepts either --all or --task, not both.")
+            runner = PipelineRunner(
+                config,
+                agent_timeout_seconds=config.pipeline.agent_timeout_seconds,
+                logger=RunLogger(console=print),
+            )
             if args.all:
                 with TerminalAnimation(
                     args.animation,
