@@ -98,6 +98,55 @@ class AgentExecutorTests(unittest.TestCase):
         self.assertIn("---END---", prompt)
         self.assertIn("Do not use markdown code fences", prompt)
 
+    def test_scene_file_writer_prompt_filters_state_updates_from_task_view(self) -> None:
+        task = parse_tasks(
+            """# Tasks
+
+- [ ] SCENE-001: Draft scene
+
+Description:
+Write the opening scene.
+
+Acceptance Criteria:
+- Writes:
+- `story/chapters/chapter-001/scene-001.md`
+- Updates:
+- `story/plot-state.md`
+- `story/unresolved-threads.md`
+"""
+        )[0]
+
+        prompt = build_prompt_bundle(
+            system_prompt="System rules",
+            stage=StageConfig(
+                id="draft_scene",
+                type="file_writer",
+                agent="drafter",
+                allowed_paths=("story/chapters",),
+            ),
+            project_context="Project context",
+            task_context="\n".join(
+                [
+                    "# Task Context",
+                    "",
+                    "## Acceptance Criteria",
+                    "",
+                    "- Writes:",
+                    "- `story/chapters/chapter-001/scene-001.md`",
+                    "- Updates:",
+                    "- `story/plot-state.md`",
+                ]
+            ),
+            task=task,
+            previous_outputs={},
+            retry_notes=[],
+        )
+
+        self.assertIn("story/chapters/chapter-001/scene-001.md", prompt)
+        self.assertNotIn("Updates:", prompt)
+        self.assertNotIn("story/plot-state.md", prompt)
+        self.assertNotIn("story/unresolved-threads.md", prompt)
+
     def test_command_agent_writes_output_and_returns_pass(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -111,6 +111,24 @@ Candidate classes:
 
 Route `local_edit` to the editor, `redraft` to the drafter, and `escalate` to a clear user-facing failure. Keep original draft and edited draft artifacts side by side for comparison.
 
+## P1: Separate Expressive Drafting From Corrective Editing
+
+If writing quality feels lower after adding stricter correctness constraints, test a two-pass creative workflow:
+
+```text
+free_draft -> corrective_edit -> review
+```
+
+The drafter would receive fewer mechanical constraints and focus on voice, scene energy, imagery, and character presence. A later editor pass would enforce:
+
+- output format
+- canonical pronouns
+- continuity details
+- acceptance criteria
+- minor cleanup
+
+This may recover stronger prose while keeping correctness guarantees. Treat it as an experiment, not a default, because weaker local models may use the looser draft prompt as permission to ignore task boundaries.
+
 ## P1: Add A Writing-Mode Validator
 
 Add deterministic checks for prose workflows:

@@ -767,6 +767,7 @@ class PipelineRunner:
         invalid_rerun_done = False
         candidate_index_path: Path | None = None
         while True:
+            updates: tuple[FileUpdate, ...] = ()
             try:
                 updates = parse_file_updates(stdout)
                 candidate_index_path = self._write_file_writer_candidates(
@@ -787,6 +788,28 @@ class PipelineRunner:
                 break
             except PipelineError as exc:
                 reason = _file_writer_error_reason(stage, str(exc))
+                allowed_updates = _filter_allowed_file_updates(updates, stage)
+                if (
+                    allowed_updates
+                    and len(allowed_updates) < len(updates)
+                    and "not allowed for this stage" in str(exc)
+                ):
+                    patch = generate_patch_from_file_updates(
+                        allowed_updates,
+                        self.config.project.root,
+                        self.config.safety,
+                        allowed_paths=stage.allowed_paths,
+                        forbidden_paths=stage.forbidden_paths or DEFAULT_FORBIDDEN_PATHS,
+                    )
+                    patch_reason = "Deterministic patch written from allowed file blocks; disallowed file blocks were ignored."
+                    log_message = "Wrote deterministic patch from allowed file blocks"
+                    self.logger.event(
+                        "file_writer.disallowed_blocks_ignored",
+                        "Ignored disallowed file blocks from file writer output",
+                        stage_id=stage.id,
+                        task_id=task.id,
+                    )
+                    break
                 if (
                     "no file blocks found" in str(exc)
                     and "diff --git " not in stdout
@@ -1812,6 +1835,18 @@ def _file_writer_stage_guidance(stage: StageConfig) -> str:
     if allowed:
         return "Return file blocks only for the allowed paths configured on this stage."
     return ""
+
+
+def _filter_allowed_file_updates(updates: tuple[FileUpdate, ...], stage: StageConfig) -> tuple[FileUpdate, ...]:
+    if not updates or not stage.allowed_paths:
+        return ()
+    allowed = tuple(path.replace("\\", "/").strip().strip("/") for path in stage.allowed_paths)
+    kept: list[FileUpdate] = []
+    for update in updates:
+        path = update.path.replace("\\", "/").strip().strip("/")
+        if any(path == root or path.startswith(root.rstrip("/") + "/") for root in allowed):
+            kept.append(update)
+    return tuple(kept)
 
 
 def _file_writer_repair_format_note(stage: StageConfig) -> str:

@@ -354,7 +354,9 @@ def build_prompt_bundle(
     task_context: str = "",
     retry_context: str | None = None,
 ) -> str:
-    acceptance = "\n".join(f"- {item}" for item in task.acceptance_criteria)
+    task_markdown = _task_markdown_for_stage(stage, task)
+    task_context = _task_context_for_stage(stage, task_context)
+    acceptance = "\n".join(f"- {item}" for item in _acceptance_for_stage(stage, task))
     prior = "\n\n".join(f"## {stage_id}\n\n{content}" for stage_id, content in previous_outputs.items())
     retries = "\n".join(f"- {note}" for note in retry_notes)
 
@@ -373,7 +375,7 @@ def build_prompt_bundle(
             "",
             "## Task",
             "",
-            task.raw_markdown.strip(),
+            task_markdown.strip(),
             "",
             "## Acceptance Criteria",
             "",
@@ -519,6 +521,94 @@ def output_contract_for(stage: StageConfig) -> str:
             ]
         )
     return "Write the requested stage output in concise markdown."
+
+
+def _task_markdown_for_stage(stage: StageConfig, task: Task) -> str:
+    if not _is_scene_drafting_stage(stage):
+        return task.raw_markdown
+    return _remove_update_bullets(_remove_task_section(task.raw_markdown, "Updates"))
+
+
+def _acceptance_for_stage(stage: StageConfig, task: Task) -> tuple[str, ...]:
+    if not _is_scene_drafting_stage(stage):
+        return task.acceptance_criteria
+    filtered: list[str] = []
+    skipping_update_paths = False
+    for item in task.acceptance_criteria:
+        normalized = item.strip()
+        lower = normalized.lower()
+        if lower == "updates:":
+            skipping_update_paths = True
+            continue
+        pathish = normalized.strip("`")
+        if skipping_update_paths and pathish.startswith("story/") and "chapters/" not in pathish:
+            continue
+        skipping_update_paths = False
+        filtered.append(item)
+    return tuple(filtered)
+
+
+def _task_context_for_stage(stage: StageConfig, task_context: str) -> str:
+    if not _is_scene_drafting_stage(stage):
+        return task_context
+    return _remove_update_bullets_from_acceptance(task_context)
+
+
+def _is_scene_drafting_stage(stage: StageConfig) -> bool:
+    allowed = {path.replace("\\", "/").rstrip("/") for path in stage.allowed_paths}
+    return stage.type == "file_writer" and "story/chapters" in allowed
+
+
+def _remove_task_section(markdown: str, section_name: str) -> str:
+    lines = markdown.splitlines()
+    output: list[str] = []
+    index = 0
+    section_header = f"{section_name}:"
+    while index < len(lines):
+        line = lines[index]
+        if line.strip() == section_header:
+            index += 1
+            while index < len(lines):
+                candidate = lines[index]
+                if re.match(r"^[A-Za-z][A-Za-z ]+:\s*$", candidate.strip()):
+                    break
+                if re.match(r"^\s*---\s*$", candidate):
+                    break
+                index += 1
+            continue
+        output.append(line)
+        index += 1
+    return "\n".join(output).strip() + "\n"
+
+
+def _remove_update_bullets_from_acceptance(markdown: str) -> str:
+    return _remove_update_bullets(markdown, only_inside_acceptance=True)
+
+
+def _remove_update_bullets(markdown: str, *, only_inside_acceptance: bool = False) -> str:
+    lines = markdown.splitlines()
+    output: list[str] = []
+    in_acceptance = not only_inside_acceptance
+    skipping_update_paths = False
+    for line in lines:
+        stripped = line.strip()
+        if only_inside_acceptance and stripped in {"## Acceptance Criteria", "Acceptance Criteria:"}:
+            in_acceptance = True
+            output.append(line)
+            continue
+        if only_inside_acceptance and in_acceptance and line.startswith("## "):
+            in_acceptance = False
+            skipping_update_paths = False
+        if in_acceptance:
+            if stripped == "- Updates:":
+                skipping_update_paths = True
+                continue
+            pathish = stripped.removeprefix("- ").strip("`")
+            if skipping_update_paths and pathish.startswith("story/") and "chapters/" not in pathish:
+                continue
+            skipping_update_paths = False
+        output.append(line)
+    return "\n".join(output)
 
 
 def _file_writer_block_contract(stage: StageConfig) -> str:

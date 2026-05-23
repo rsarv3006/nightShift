@@ -772,7 +772,7 @@ Acceptance Criteria:
             self.assertTrue(candidate_index.exists())
             self.assertIn("app.py", candidate_index.read_text(encoding="utf-8"))
 
-    def test_file_writer_preserves_candidates_when_stage_paths_reject_extra_files(self) -> None:
+    def test_file_writer_ignores_disallowed_blocks_when_allowed_candidate_exists(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             _write_common_files(root)
@@ -811,9 +811,14 @@ Acceptance Criteria:
 
             task_dir = root / ".nightshift" / "runs" / "test-run" / "tasks" / "TASK-001"
             candidate = task_dir / "candidate-files" / "draft_scene" / "001-story_chapters_scene.md"
-            self.assertEqual(result.status, "failed")
-            self.assertIn("This is the drafting stage", result.reason)
+            rejected_candidate = task_dir / "candidate-files" / "draft_scene" / "002-story_plot-state.md"
+            patch = task_dir / "proposed.patch"
+            self.assertEqual(result.status, "complete")
+            self.assertTrue(patch.exists())
+            self.assertIn("story/chapters/scene.md", patch.read_text(encoding="utf-8"))
+            self.assertNotIn("story/plot-state.md", patch.read_text(encoding="utf-8"))
             self.assertTrue(candidate.exists())
+            self.assertTrue(rejected_candidate.exists())
             self.assertEqual(candidate.read_text(encoding="utf-8"), "scene prose\n")
 
     def test_file_writer_accepts_unified_diff_fallback(self) -> None:
