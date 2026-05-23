@@ -9,6 +9,8 @@ safety:
   scoped_paths:
     - story
     - README.md
+    - STORY_FILES.md
+    - pyproject.toml
   allowed_commands:
     - python -m pytest -q
   forbidden_commands:
@@ -17,18 +19,10 @@ safety:
     - curl | bash
 
 experiment:
-  label: tutorial-novel
-  prompt_variant: scene-state-workflow-v1
+  label: tutorial-novel-simple
+  prompt_variant: scene-state-simple-v1
 
 agents:
-  planner:
-    backend: ollama
-    model: nightshift-base
-    temperature: 0.4
-    num_ctx: 8192
-    num_predict: 4096
-    system_prompt: .nightshift/agents/planner.md
-
   drafter:
     backend: ollama
     model: nightshift-writer
@@ -36,30 +30,6 @@ agents:
     num_ctx: 16384
     num_predict: 8192
     system_prompt: .nightshift/agents/drafter.md
-
-  editor:
-    backend: ollama
-    model: nightshift-writer
-    temperature: 0.3
-    num_ctx: 16384
-    num_predict: 8192
-    system_prompt: .nightshift/agents/editor.md
-
-  continuity_reviewer:
-    backend: ollama
-    model: nightshift-base
-    temperature: 0.2
-    num_ctx: 8192
-    num_predict: 4096
-    system_prompt: .nightshift/agents/continuity-reviewer.md
-
-  style_reviewer:
-    backend: ollama
-    model: nightshift-base
-    temperature: 0.3
-    num_ctx: 8192
-    num_predict: 4096
-    system_prompt: .nightshift/agents/style-reviewer.md
 
   state_updater:
     backend: ollama
@@ -74,16 +44,7 @@ pipeline:
   stop_on_repeated_failure_signature_after: 3
   continue_on_task_failure: false
   stages:
-    - id: plan
-      type: agent
-      agent: planner
-      output: scene-plan.md
-
-    - id: semantic_context
-      type: semantic_context
-      output: semantic-context.md
-
-    - id: context
+    - id: build_context
       type: repo_context
       output: context-pack.md
 
@@ -93,67 +54,27 @@ pipeline:
       output: scene-draft.patch
       allowed_paths:
         - story/chapters
+      on_fail: draft_scene
 
-    - id: normalize_draft
+    - id: normalize_patch
       type: patch_normalizer
-      output: normalized-draft.patch
+      output: normalized-scene.patch
 
-    - id: validate_draft
+    - id: hard_validate_patch
       type: patch_validator
-      output: draft-validation.md
-      max_files: 2
+      output: scene-validation.md
+      max_files: 1
       max_lines: 4000
       max_delete_ratio: 0.50
       allowed_paths:
         - story/chapters
       on_fail: draft_scene
 
-    - id: apply_draft
+    - id: apply_scene
       type: patch_apply
       mode: apply
-      output: draft-apply-output.txt
+      output: scene-apply-output.txt
       on_fail: draft_scene
-
-    - id: continuity_review
-      type: agent_review
-      agent: continuity_reviewer
-      output: continuity-review.md
-      on_fail: edit_scene
-
-    - id: style_review
-      type: agent_review
-      agent: style_reviewer
-      output: style-review.md
-      on_fail: edit_scene
-      on_pass: update_state
-
-    - id: edit_scene
-      type: file_writer
-      agent: editor
-      output: scene-edit.patch
-      allowed_paths:
-        - story/chapters
-
-    - id: normalize_edit
-      type: patch_normalizer
-      output: normalized-edit.patch
-
-    - id: validate_edit
-      type: patch_validator
-      output: edit-validation.md
-      max_files: 2
-      max_lines: 1200
-      max_delete_ratio: 0.50
-      allowed_paths:
-        - story/chapters
-      on_fail: edit_scene
-
-    - id: apply_edit
-      type: patch_apply
-      mode: apply
-      output: edit-apply-output.txt
-      on_fail: edit_scene
-      on_pass: continuity_review
 
     - id: update_state
       type: file_writer
@@ -161,33 +82,28 @@ pipeline:
       output: state-update.patch
       allowed_paths:
         - story/plot-state.md
-        - story/characters.md
         - story/timeline.md
         - story/unresolved-threads.md
+      on_fail: summarize_warnings
 
-    - id: normalize_state
-      type: patch_normalizer
-      output: normalized-state.patch
-
-    - id: validate_state
+    - id: hard_validate_state
       type: patch_validator
       output: state-validation.md
-      max_files: 5
+      max_files: 3
       max_lines: 1200
       max_delete_ratio: 0.35
       allowed_paths:
         - story/plot-state.md
-        - story/characters.md
         - story/timeline.md
         - story/unresolved-threads.md
-      on_fail: update_state
+      on_fail: summarize_warnings
 
     - id: apply_state
       type: patch_apply
       mode: apply
       output: state-apply-output.txt
-      on_fail: update_state
+      on_fail: summarize_warnings
 
-    - id: summarize
+    - id: summarize_warnings
       type: summarize
       output: final-notes.md

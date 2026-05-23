@@ -16,3 +16,7 @@ story/chapters/*.md
 .nightshift/project-context.md
 .nightshift/project-context-chart.md
 .nightshift/nightshift.log
+
+__pycache__/
+*.py[cod]
+.pytest_cache/

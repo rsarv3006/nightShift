@@ -48,7 +48,7 @@ from .runlog import RunLogger
 from .stages import StageResult
 from .tasks import Task, mark_task_completed
 from .telemetry import TelemetryEntry, format_telemetry_summary, telemetry_from_stage_output
-from .writing_validators import validate_writing_file_updates
+from .writing_validators import collect_writing_warnings, validate_writing_file_updates
 
 
 @dataclass(frozen=True)
@@ -767,6 +767,7 @@ class PipelineRunner:
             stdout = self._read_agent_stdout(result.output_path)
         invalid_rerun_done = False
         candidate_index_path: Path | None = None
+        warning_path: Path | None = None
         while True:
             updates: tuple[FileUpdate, ...] = ()
             try:
@@ -779,6 +780,7 @@ class PipelineRunner:
                 )
                 if _is_writing_file_writer_stage(stage):
                     validate_writing_file_updates(updates, self.config.project.root)
+                    warning_path = self._write_file_writer_warnings(task.id, stage, updates, retry_count)
                 patch = generate_patch_from_file_updates(
                     updates,
                     self.config.project.root,
@@ -799,6 +801,12 @@ class PipelineRunner:
                 ):
                     if _is_writing_file_writer_stage(stage):
                         validate_writing_file_updates(allowed_updates, self.config.project.root)
+                        warning_path = self._write_file_writer_warnings(
+                            task.id,
+                            stage,
+                            allowed_updates,
+                            retry_count,
+                        )
                     patch = generate_patch_from_file_updates(
                         allowed_updates,
                         self.config.project.root,
@@ -910,7 +918,11 @@ class PipelineRunner:
             "pass",
             patch_reason,
             output_path=str(proposed_path.relative_to(self.config.project.root)),
-            context_update=f"Implementation summary: {summary_path.relative_to(self.config.project.root).as_posix()}",
+            context_update=_format_writer_context_update(
+                self.config.project.root,
+                summary_path,
+                warning_path,
+            ),
         )
 
     def _write_file_writer_candidates(
@@ -953,6 +965,31 @@ class PipelineRunner:
             )
         lines.append("")
         return self.artifacts.write_stage_output(task_id, f"{base}/index.md", "\n".join(lines))
+
+    def _write_file_writer_warnings(
+        self,
+        task_id: str,
+        stage: StageConfig,
+        updates: tuple[FileUpdate, ...],
+        retry_count: int,
+    ) -> Path | None:
+        warnings = collect_writing_warnings(updates, self.config.project.root)
+        if not warnings:
+            return None
+        filename = _attempt_filename(f"{stage.id}-warnings.md", retry_count)
+        lines = [
+            "# Writing Warnings",
+            "",
+            f"Stage: `{stage.id}`",
+            "",
+            "These are soft writing concerns. They do not block artifact creation.",
+            "",
+            "## Warnings",
+            "",
+            *[f"- {warning}" for warning in warnings],
+            "",
+        ]
+        return self.artifacts.write_stage_output(task_id, filename, "\n".join(lines))
 
     def _allowed_file_contents(self, stage: StageConfig, max_chars: int = 2400) -> str:
         sections: list[str] = []
@@ -1675,6 +1712,18 @@ def format_implementation_summary(
     lines.extend(f"- {note}" for note in notes[-5:]) if notes else lines.append("- None")
     lines.append("")
     return "\n".join(lines)
+
+
+def _format_writer_context_update(
+    project_root: Path,
+    summary_path: Path,
+    warning_path: Path | None,
+) -> str:
+    summary = summary_path.relative_to(project_root).as_posix()
+    if warning_path is None:
+        return f"Implementation summary: {summary}"
+    warnings = warning_path.relative_to(project_root).as_posix()
+    return f"Implementation summary: {summary}; writing warnings: {warnings}"
 
 
 def _latest_patch_like_output(previous_outputs: dict[str, str]) -> str:

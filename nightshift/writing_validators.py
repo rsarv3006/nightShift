@@ -14,7 +14,7 @@ from .patches import FileUpdate
 
 
 def validate_writing_file_updates(updates: tuple[FileUpdate, ...], project_root: Path) -> None:
-    """Validate writing-specific invariants for novel scene/state file updates."""
+    """Validate hard writing-specific invariants for novel scene/state updates."""
 
     root = Path(project_root)
     characters_path = root / "story" / "characters.md"
@@ -27,8 +27,24 @@ def validate_writing_file_updates(updates: tuple[FileUpdate, ...], project_root:
         normalized_path = update.path.replace("\\", "/").strip().strip("/")
         if normalized_path == "story/characters.md":
             _validate_protected_character_canon(normalized_path, character_sections, update.content)
+
+
+def collect_writing_warnings(updates: tuple[FileUpdate, ...], project_root: Path) -> tuple[str, ...]:
+    """Collect soft writing concerns without blocking artifact creation."""
+
+    root = Path(project_root)
+    characters_path = root / "story" / "characters.md"
+    character_sections = (
+        _pronoun_reference_sections(characters_path.read_text(encoding="utf-8", errors="replace"))
+        if characters_path.is_file()
+        else {}
+    )
+    warnings: list[str] = []
+    for update in updates:
+        normalized_path = update.path.replace("\\", "/").strip().strip("/")
         if normalized_path.startswith("story/chapters/") and normalized_path.endswith(".md"):
-            _validate_scene_pronoun_canon(normalized_path, update.content, character_sections)
+            warnings.extend(_scene_pronoun_canon_warnings(normalized_path, update.content, character_sections))
+    return tuple(warnings)
 
 
 def _validate_protected_character_canon(
@@ -52,18 +68,19 @@ def _validate_protected_character_canon(
         )
 
 
-def _validate_scene_pronoun_canon(
+def _scene_pronoun_canon_warnings(
     path_text: str,
     scene_text: str,
     sections: dict[str, str],
-) -> None:
+) -> tuple[str, ...]:
     if not sections:
-        return
+        return ()
     rules = _pronoun_rules_from_sections(sections)
     if not rules:
-        return
+        return ()
     aliases = {alias: character for character in rules for alias in _character_aliases(character)}
     active_character: str | None = None
+    warnings: list[str] = []
     for sentence in _scene_sentences(scene_text):
         present = {
             character
@@ -78,7 +95,7 @@ def _validate_scene_pronoun_canon(
             continue
         forbidden = rules[character]
         if present:
-            bad = _first_forbidden_pronoun(sentence, forbidden)
+            bad = _first_forbidden_pronoun_after_alias(sentence, character, forbidden)
             active_character = character
         else:
             bad = _leading_forbidden_pronoun(sentence, forbidden)
@@ -88,10 +105,12 @@ def _validate_scene_pronoun_canon(
             excerpt = sentence.strip()
             if len(excerpt) > 160:
                 excerpt = excerpt[:157].rstrip() + "..."
-            raise PipelineError(
-                "File writer error: scene pronoun canon violation for "
-                f"{character}: found `{bad}` near character reference. Excerpt: {excerpt}"
+            warnings.append(
+                "Scene pronoun canon warning in "
+                f"`{path_text}` for {character}: found `{bad}` near character reference. "
+                f"Excerpt: {excerpt}"
             )
+    return tuple(warnings)
 
 
 def _first_forbidden_pronoun(sentence: str, forbidden: tuple[str, ...]) -> str | None:
@@ -103,6 +122,26 @@ def _first_forbidden_pronoun(sentence: str, forbidden: tuple[str, ...]) -> str |
         ),
         None,
     )
+
+
+def _first_forbidden_pronoun_after_alias(
+    sentence: str,
+    character: str,
+    forbidden: tuple[str, ...],
+) -> str | None:
+    alias_match = _first_alias_match(sentence, character)
+    if alias_match is None:
+        return _first_forbidden_pronoun(sentence, forbidden)
+    return _first_forbidden_pronoun(sentence[alias_match.end() :], forbidden)
+
+
+def _first_alias_match(sentence: str, character: str) -> re.Match[str] | None:
+    matches = [
+        match
+        for alias in _character_aliases(character)
+        for match in re.finditer(rf"\b{re.escape(alias)}\b", sentence)
+    ]
+    return min(matches, key=lambda match: match.start()) if matches else None
 
 
 def _leading_forbidden_pronoun(sentence: str, forbidden: tuple[str, ...]) -> str | None:

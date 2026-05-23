@@ -4,7 +4,7 @@ import unittest
 
 from nightshift.errors import PipelineError
 from nightshift.patches import FileUpdate
-from nightshift.writing_validators import validate_writing_file_updates
+from nightshift.writing_validators import collect_writing_warnings, validate_writing_file_updates
 
 
 class WritingValidatorTests(unittest.TestCase):
@@ -44,7 +44,7 @@ Scavenger.
             with self.assertRaisesRegex(PipelineError, "protected character pronoun canon changed"):
                 validate_writing_file_updates(updates, root)
 
-    def test_rejects_scene_pronoun_drift(self) -> None:
+    def test_reports_scene_pronoun_drift_as_warning(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "story" / "chapters").mkdir(parents=True)
@@ -66,8 +66,12 @@ Scavenger.
                 ),
             )
 
-            with self.assertRaisesRegex(PipelineError, "scene pronoun canon violation for Proxy"):
-                validate_writing_file_updates(updates, root)
+            validate_writing_file_updates(updates, root)
+            warnings = collect_writing_warnings(updates, root)
+
+            self.assertEqual(len(warnings), 1)
+            self.assertIn("Proxy", warnings[0])
+            self.assertIn("found `he`", warnings[0])
 
     def test_allows_scene_pronouns_when_multiple_characters_make_ambiguous_sentence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -94,6 +98,40 @@ Scavenger.
                 FileUpdate(
                     path="story/chapters/chapter-001/scene-001.md",
                     content="Proxy watched Saint as he picked up the phone.\n",
+                ),
+            )
+
+            validate_writing_file_updates(updates, root)
+
+    def test_allows_pronoun_before_other_character_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "story" / "chapters" / "chapter-001").mkdir(parents=True)
+            (root / "story" / "characters.md").write_text(
+                """# Characters
+
+## Proxy
+
+### Pronouns / Reference
+- Pronouns: she/her
+- Narrative reference: Proxy; she/her
+
+## DJ BLOODMONEY
+
+### Pronouns / Reference
+- Pronouns: they/them or he/him
+- Narrative default: BLOODMONEY; they/them
+""",
+                encoding="utf-8",
+            )
+            updates = (
+                FileUpdate(
+                    path="story/chapters/chapter-001/scene-001.md",
+                    content=(
+                        "BLOODMONEY stood behind the turntables. "
+                        "He adjusted the EQ with one hand, let his hair fall into his eyes, "
+                        "and glanced over at Proxy without breaking the groove.\n"
+                    ),
                 ),
             )
 
