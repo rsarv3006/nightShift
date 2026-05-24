@@ -62,6 +62,7 @@ class StageConfig:
     commands: tuple[str, ...] = ()
     output: str | None = None
     on_fail: str | None = None
+    on_pass: str | None = None
     on_status: dict[str, str] | None = None
     shell: bool = True
     timeout_seconds: int | None = None
@@ -398,6 +399,7 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> NightShiftConfig:
                 commands=commands,
                 output=_optional_string(stage_raw.get("output"), f"{stage_context}.output"),
                 on_fail=_optional_string(stage_raw.get("on_fail"), f"{stage_context}.on_fail"),
+                on_pass=_optional_string(stage_raw.get("on_pass"), f"{stage_context}.on_pass"),
                 on_status=_parse_on_status(stage_raw, stage_context),
                 shell=_optional_bool(stage_raw.get("shell", True), f"{stage_context}.shell"),
                 timeout_seconds=timeout_seconds,
@@ -422,6 +424,10 @@ def parse_config(raw: dict[str, Any], config_path: Path) -> NightShiftConfig:
         if stage.on_fail and stage.on_fail not in stage_ids:
             raise ConfigError(
                 f"Config error: stage '{stage.id}' on_fail references unknown stage '{stage.on_fail}'."
+            )
+        if stage.on_pass and stage.on_pass not in stage_ids:
+            raise ConfigError(
+                f"Config error: stage '{stage.id}' on_pass references unknown stage '{stage.on_pass}'."
             )
         if stage.on_status:
             for status_key, target in stage.on_status.items():
@@ -650,8 +656,11 @@ VALID_STATUS_KEYS = frozenset({"pass", "fail", "retry", "escalate"})
 
 def _parse_on_status(raw: dict[str, Any], context: str) -> dict[str, str] | None:
     on_status_raw = raw.get("on_status")
-    if on_status_raw is None:
+    on_pass = _optional_string(raw.get("on_pass"), f"{context}.on_pass")
+    if on_status_raw is None and on_pass is None:
         return None
+    if on_status_raw is None:
+        return {"pass": on_pass} if on_pass is not None else None
     if not isinstance(on_status_raw, dict):
         raise ConfigError(f"Config error: {context}.on_status must be a mapping.")
     on_status: dict[str, str] = {}
@@ -666,4 +675,11 @@ def _parse_on_status(raw: dict[str, Any], context: str) -> dict[str, str] | None
                 f"Config error: {context}.on_status.{key} must be a non-empty string."
             )
         on_status[key] = value
+    if on_pass is not None:
+        existing_pass = on_status.get("pass")
+        if existing_pass is not None and existing_pass != on_pass:
+            raise ConfigError(
+                f"Config error: {context}.on_pass conflicts with on_status.pass."
+            )
+        on_status["pass"] = on_pass
     return on_status

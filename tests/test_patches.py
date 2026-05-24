@@ -7,6 +7,7 @@ from nightshift.errors import PipelineError
 from nightshift.patches import (
     generate_patch_from_file_updates,
     normalize_patch_text,
+    parse_delimited_file_updates,
     parse_file_updates,
     repair_hunk_counts,
     validate_patch,
@@ -248,7 +249,7 @@ test
             self.assertEqual(result.files, ("src/app.py", "src/test_app.py"))
 
     def test_file_updates_parse_explicit_delimiters(self) -> None:
-        updates = parse_file_updates(
+        updates = parse_delimited_file_updates(
             """FILE: story/chapters/chapter-001/scene-001.md
 ---CONTENT---
 Sunlight did not belong here.
@@ -261,7 +262,7 @@ Sunlight did not belong here.
         self.assertEqual(updates[0].content, "Sunlight did not belong here.\n")
 
     def test_file_updates_parse_delimiters_without_end_before_next_file(self) -> None:
-        updates = parse_file_updates(
+        updates = parse_delimited_file_updates(
             """Intro prose is ignored.
 
 FILE: story/plot-state.md
@@ -285,7 +286,7 @@ FILE: story/timeline.md
         self.assertEqual(updates[1].content, "# Timeline\n\n- SCENE-002 complete.\n")
 
     def test_file_updates_parse_mixed_delimiter_end_and_next_file(self) -> None:
-        updates = parse_file_updates(
+        updates = parse_delimited_file_updates(
             """FILE: story/plot-state.md
 ---CONTENT---
 first
@@ -300,6 +301,16 @@ second
         self.assertEqual(len(updates), 2)
         self.assertEqual(updates[0].content, "first\n")
         self.assertEqual(updates[1].content, "second\n")
+
+    def test_code_file_updates_reject_delimiter_blocks(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "no fenced file blocks"):
+            parse_file_updates(
+                """FILE: src/app.py
+---CONTENT---
+print("hello")
+---END---
+"""
+            )
 
     def test_file_updates_reject_duplicate_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

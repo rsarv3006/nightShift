@@ -82,6 +82,30 @@ lookup_requests:
             self.assertIn("src/app.py:1", matches)
             self.assertNotIn(".nightshift", matches)
 
+    def test_repo_tools_skip_configured_path_parts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "dist").mkdir()
+            (root / "dist" / "bundle.js").write_text("needle\n", encoding="utf-8")
+            (root / "src").mkdir()
+            (root / "src" / "app.js").write_text("needle\n", encoding="utf-8")
+            safety = SafetyConfig(
+                require_clean_worktree=False,
+                scoped_paths=(".",),
+                allowed_commands=(),
+                forbidden_commands=(),
+                skip_repo_parts=("dist",),
+            )
+            tools = RepoTools(root, safety, ArtifactStore(root, ".nightshift", run_id="test-run"))
+
+            files = tools.list_files(".")
+            matches = tools.grep("needle", ".")
+
+            self.assertIn("src/app.js", files)
+            self.assertNotIn("dist/bundle.js", files)
+            self.assertIn("src/app.js:1", matches)
+            self.assertNotIn("dist/bundle.js", matches)
+
 
 if __name__ == "__main__":
     unittest.main()

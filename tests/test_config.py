@@ -77,6 +77,26 @@ class ConfigTests(unittest.TestCase):
             })
             self.assertIsNone(review_stage.on_fail)
 
+    def test_on_pass_loads_as_legacy_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            init_project(root)
+            config_path = root / "nightshift.yaml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8").replace(
+                    "      output: plan.md",
+                    "      output: plan.md\n      on_pass: summarize",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+            plan_stage = next(stage for stage in config.pipeline.stages if stage.id == "plan")
+
+            self.assertEqual(plan_stage.on_pass, "summarize")
+            self.assertEqual(plan_stage.on_status, {"pass": "summarize"})
+
     def test_on_status_rejects_invalid_key(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -106,6 +126,24 @@ class ConfigTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ConfigError, "on_status.fail references unknown stage"):
                 load_config(config_path)
+
+    def test_skip_repo_parts_loads(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            init_project(root)
+            config_path = root / "nightshift.yaml"
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8").replace(
+                    "  allowed_commands:",
+                    "  skip_repo_parts:\n    - dist\n  allowed_commands:",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+            self.assertEqual(config.safety.skip_repo_parts, ("dist",))
 
     def test_validate_requires_prompt_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

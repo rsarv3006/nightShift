@@ -20,7 +20,7 @@ After that correction, the automated test suite passes.
 - State update file-writer stages receive focused current state context.
 - Scene editor file-writer stages receive `current_scene_file`.
 - Agent invocations now write a sibling JSON artifact for reliable stdout/stderr extraction.
-- Pipeline config now supports optional `on_pass` routing.
+- Pipeline config now supports optional `on_status` routing. The older `on_pass` key remains as a deprecated alias for `on_status.pass`.
 
 ## Coding Impact Findings
 
@@ -37,11 +37,11 @@ No non-novel project template files changed in the current diff:
 
 The new `editor` agent and review repair routing are only configured in `tutorial-novel/nightshift.yaml`.
 
-### Finding 2: `on_pass` is inert for existing coding configs
+### Finding 2: `on_status` is inert for existing coding configs
 
-`on_pass` defaults to `None`, so existing coding templates keep their prior linear pass behavior unless they explicitly opt in.
+`on_status` defaults to `None`, so existing coding templates keep their prior linear pass behavior unless they explicitly opt in.
 
-Passing review stages still ignore model-provided `next_stage` values. This preserves the existing safety behavior where reviewers cannot jump around the pipeline on a pass unless the config has an explicit `on_pass`.
+Passing review stages still ignore model-provided `next_stage` values. This preserves the existing safety behavior where reviewers cannot jump around the pipeline on a pass unless the config has an explicit `on_status.pass` or legacy `on_pass`.
 
 ### Finding 3: Code writer stages still use the same direct patch path
 
@@ -131,6 +131,6 @@ Result:
 
 ## Conclusion
 
-After the first-attempt file-writer context fix, I do not see evidence that the writer workflow changes degrade code generation. The shared changes are either opt-in (`on_pass`), artifact-reading improvements (JSON stdout), or narrowly gated to novel state/editor stages.
+After the first-attempt file-writer context fix, I do not see evidence that the writer workflow changes degrade code generation. The shared changes are either opt-in (`on_status`), artifact-reading improvements (JSON stdout), or narrowly gated to novel state/editor stages.
 
 Remaining non-writer issue: several coding-oriented templates still reference a missing `debugger.md` prompt. That should be handled separately from this writer/coder compatibility pass.

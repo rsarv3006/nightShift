@@ -16,6 +16,7 @@ NightShift config is YAML.
 - `allowed_commands`: exact command-stage allowlist entries after whitespace normalization.
 - `forbidden_commands`: dangerous fragments blocked before allowlist acceptance.
 - `allowed_env`: optional environment variable names to pass to command stages.
+- `skip_repo_parts`: optional directory or path-part names to exclude from repo lookup tools, in addition to built-in skips such as `.git`, `.nightshift`, `__pycache__`, `.venv`, and `venv`.
 
 ## `experiment`
 
@@ -104,13 +105,22 @@ Writer stages:
 - `code_writer`: agent returns a unified diff directly.
 - `file_writer`: agent returns complete file content blocks; NightShift generates the unified diff deterministically. Prefer this for local models that wrap or miscount long patch hunks.
 
-`file_writer` blocks use this form:
+Code-oriented `file_writer` stages use fenced blocks:
 
 ````markdown
-```file:relative/path.py
+```file:relative/path.to
 <complete file content>
 ```
 ````
+
+Writing-oriented `file_writer` stages for `story/chapters` and story state files use delimiter blocks:
+
+```text
+FILE: story/chapters/chapter-001/scene-001.md
+---CONTENT---
+<complete prose or state content>
+---END---
+```
 
 Semantic context stage:
 
@@ -124,7 +134,7 @@ This stage builds a lightweight repository index of files, Python symbols, impor
 
 ### `on_status` Stage Routing
 
-Instead of a single `on_fail` catch-all, use `on_status` to route each review status to a different stage:
+Use `on_status` to route stage statuses to different follow-up stages:
 
 ```yaml
 - id: review
@@ -135,10 +145,12 @@ Instead of a single `on_fail` catch-all, use `on_status` to route each review st
     pass: summarize
     retry: implement
     fail: plan
-    escalate: human
+    escalate: summarize
 ```
 
 `on_status` supports `pass`, `fail`, `retry`, and `escalate` keys. For `pass`, it overrides sequential progression and any agent-supplied `next_stage`. For non-pass statuses, the lookup order is: `on_status[status]` → `on_fail` → `next_stage` (agent output).
+
+The older `on_pass` key remains supported as a deprecated alias for `on_status.pass`.
 
 ## Failure, Retry, and Resource Artifacts
 

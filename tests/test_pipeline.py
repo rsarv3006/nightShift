@@ -238,11 +238,77 @@ class PipelineRunnerTests(unittest.TestCase):
 
             result = runner.run_task(task)
 
-            self.assertEqual(result.status, "failed")
-            self.assertEqual(result.retry_count, 2)
+            self.assertEqual(result.status, "complete")
+            self.assertEqual(result.retry_count, 1)
             self.assertEqual(
                 [r.stage_id for r in result.stage_results],
-                ["plan", "review", "implement", "review", "implement", "review"],
+                ["plan", "review", "implement"],
+            )
+
+    def test_on_status_pass_jumps_to_configured_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_common_files(root)
+            stages = (
+                StageConfig(id="first", type="agent", agent="planner", output="first.md", on_status={"pass": "third"}),
+                StageConfig(
+                    id="second",
+                    type="command",
+                    commands=('python -c "print(\'should not run\')"',),
+                    output="second-output.txt",
+                ),
+                StageConfig(id="third", type="summarize", output="final-notes.md"),
+            )
+            config = make_config(root, stages)
+            runner = PipelineRunner(config, ArtifactStore(root, ".nightshift", run_id="test-run"))
+
+            result = runner.run_task(parse_tasks(TASK_MD)[0])
+
+            task_dir = root / ".nightshift" / "runs" / "test-run" / "tasks" / "TASK-001"
+            self.assertEqual(result.status, "complete")
+            self.assertEqual([item.stage_id for item in result.stage_results], ["first", "third"])
+            self.assertFalse((task_dir / "second-output.txt").exists())
+
+    def test_on_status_failure_takes_priority_over_agent_next_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_common_files(root)
+            config = make_config(root, (), max_retries=1)
+            config.agents["reviewer"] = AgentConfig(
+                id="reviewer",
+                backend="command",
+                command=(
+                    "python -c \"print('status: retry\\nreason: needs plan repair\\n"
+                    "next_stage: implement')\""
+                ),
+                system_prompt=Path("reviewer.md"),
+            )
+            config = replace(
+                config,
+                pipeline=PipelineConfig(
+                    max_task_retries=1,
+                    stages=(
+                        StageConfig(id="plan", type="agent", agent="planner", output="plan.md"),
+                        StageConfig(id="implement", type="agent", agent="planner", output="implementation-log.md"),
+                        StageConfig(
+                            id="review",
+                            type="agent_review",
+                            agent="reviewer",
+                            on_status={"retry": "plan"},
+                            on_fail="implement",
+                            output="review.md",
+                        ),
+                    ),
+                ),
+            )
+            runner = PipelineRunner(config, ArtifactStore(root, ".nightshift", run_id="test-run"))
+
+            result = runner.run_task(parse_tasks(TASK_MD)[0])
+
+            self.assertEqual(result.retry_count, 1)
+            self.assertEqual(
+                [item.stage_id for item in result.stage_results],
+                ["plan", "implement", "review", "plan", "implement", "review"],
             )
 
     def test_task_preflight_fails_when_task_specific_test_file_is_missing(self) -> None:
@@ -963,12 +1029,14 @@ Acceptance Criteria:
             (root / "fake_writer.py").write_text(
                 "\n".join(
                     [
-                        "print('```file:story/chapters/scene.md')",
+                        "print('FILE: story/chapters/scene.md')",
+                        "print('---CONTENT---')",
                         "print('scene prose')",
-                        "print('```')",
-                        "print('```file:story/plot-state.md')",
+                        "print('---END---')",
+                        "print('FILE: story/plot-state.md')",
+                        "print('---CONTENT---')",
                         "print('state')",
-                        "print('```')",
+                        "print('---END---')",
                     ]
                 ),
                 encoding="utf-8",

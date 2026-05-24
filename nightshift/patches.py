@@ -90,10 +90,9 @@ def repair_hunk_counts(patch: str) -> str:
 
 
 def parse_file_updates(text: str) -> tuple[FileUpdate, ...]:
-    """Parse model-supplied complete file content blocks."""
+    """Parse fenced model-supplied complete file content blocks."""
 
     updates: list[FileUpdate] = []
-    updates.extend(_parse_delimited_file_updates(text))
     pattern = re.compile(
         r"```(?:file|path)[:=](?P<path>[^\n`]+)\n(?P<content>.*?)```",
         flags=re.DOTALL | re.IGNORECASE,
@@ -106,22 +105,44 @@ def parse_file_updates(text: str) -> tuple[FileUpdate, ...]:
         updates.append(FileUpdate(path=path, content=content))
     if not updates:
         raise PipelineError(
-            "File writer error: no file blocks found. Expected fenced blocks like ```file:path.to."
+            "File writer error: no fenced file blocks found. Expected fenced blocks like ```file:path.to."
         )
     return tuple(updates)
 
 
-def _parse_delimited_file_updates(text: str) -> list[FileUpdate]:
+def parse_delimited_file_updates(text: str) -> tuple[FileUpdate, ...]:
+    """Parse delimiter file blocks used by prose and story-state writer stages."""
+
+    updates: list[FileUpdate] = []
+    header_pattern = re.compile(r"(?m)^FILE:\s*(?P<path>[^\n]+)\n---CONTENT---\n")
+    matches = list(header_pattern.finditer(text))
+    for index, match in enumerate(matches):
+        path = match.group("path").strip().strip("`")
+        content_start = match.end()
+        next_file_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        raw_content = text[content_start:next_file_start]
+        end_match = re.search(r"(?m)^---END---\s*$", raw_content)
+        if end_match:
+            raw_content = raw_content[: end_match.start()]
+        content = raw_content.rstrip("\r\n") + "\n"
+        if path:
+            updates.append(FileUpdate(path=path, content=content))
+    if updates:
+        return tuple(updates)
+
     pattern = re.compile(
         r"(?ms)^FILE:\s*(?P<path>[^\n]+)\n---CONTENT---\n(?P<content>.*?)\n---END---\s*$"
     )
-    updates: list[FileUpdate] = []
     for match in pattern.finditer(text):
         path = match.group("path").strip().strip("`")
         content = match.group("content")
         if path:
             updates.append(FileUpdate(path=path, content=content + "\n"))
-    return updates
+    if not updates:
+        raise PipelineError(
+            "File writer error: no delimiter file blocks found. Expected FILE: path with ---CONTENT---/---END---."
+        )
+    return tuple(updates)
 
 
 def generate_patch_from_file_updates(

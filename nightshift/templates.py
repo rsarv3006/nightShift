@@ -73,7 +73,7 @@ pipeline:
       #   pass: summarize
       #   retry: implement
       #   fail: plan
-      #   escalate: human
+      #   escalate: summarize
       on_fail: implement
       output: review.md
 

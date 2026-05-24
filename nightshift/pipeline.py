@@ -30,6 +30,7 @@ from .patches import (
     format_validation_result,
     generate_patch_from_file_updates,
     normalize_patch_text,
+    parse_delimited_file_updates,
     parse_file_updates,
     validate_patch,
 )
@@ -200,41 +201,22 @@ class PipelineRunner:
                 retry_notes.append(f"Context update from '{stage.id}': {result.context_update}")
 
             if result.status == "pass":
-                if stage.on_status and "pass" in stage.on_status:
-                    target = stage.on_status["pass"]
-                    if target not in stage_indexes:
-                        final_status = "failed"
-                        final_reason = (
-                            f"Stage '{stage.id}' on_status.pass references unknown stage '{target}'."
-                        )
-                        break
+                pass_target_stage = (stage.on_status or {}).get("pass") or stage.on_pass or result.next_stage
+                if stage.type in {"agent_review", "review"} and result.next_stage:
                     self.logger.event(
-                        "stage.next",
-                        "Jumping via on_status.pass",
+                        "stage.next_ignored",
+                        "Ignoring next_stage from passing review",
                         run_id=self.artifacts.run_id,
                         task_id=task.id,
                         stage_id=stage.id,
-                        next_stage=target,
+                        requested_next_stage=result.next_stage,
                     )
-                    index = stage_indexes[target]
-                    continue
-                if stage.type in {"agent_review", "review"}:
-                    if result.next_stage:
-                        self.logger.event(
-                            "stage.next_ignored",
-                            "Ignoring next_stage from passing review",
-                            run_id=self.artifacts.run_id,
-                            task_id=task.id,
-                            stage_id=stage.id,
-                            requested_next_stage=result.next_stage,
-                        )
-                    index += 1
-                    continue
-                if result.next_stage:
-                    if result.next_stage not in stage_indexes:
+                    pass_target_stage = (stage.on_status or {}).get("pass") or stage.on_pass
+                if pass_target_stage:
+                    if pass_target_stage not in stage_indexes:
                         final_status = "failed"
                         final_reason = (
-                            f"Stage '{stage.id}' requested unknown next stage '{result.next_stage}'."
+                            f"Stage '{stage.id}' requested unknown next stage '{pass_target_stage}'."
                         )
                         break
                     self.logger.event(
@@ -243,9 +225,9 @@ class PipelineRunner:
                         run_id=self.artifacts.run_id,
                         task_id=task.id,
                         stage_id=stage.id,
-                        next_stage=result.next_stage,
+                        next_stage=pass_target_stage,
                     )
-                    index = stage_indexes[result.next_stage]
+                    index = stage_indexes[pass_target_stage]
                     continue
                 index += 1
                 continue
@@ -790,7 +772,7 @@ class PipelineRunner:
         while True:
             updates: tuple[FileUpdate, ...] = ()
             try:
-                updates = parse_file_updates(stdout)
+                updates = _parse_file_writer_updates(stage, stdout)
                 candidate_index_path = self._write_file_writer_candidates(
                     task.id,
                     stage,
@@ -843,7 +825,7 @@ class PipelineRunner:
                     )
                     break
                 if (
-                    "no file blocks found" in str(exc)
+                    "file blocks found" in str(exc)
                     and "diff --git " not in stdout
                     and not invalid_rerun_done
                 ):
@@ -1842,6 +1824,8 @@ def _invalid_file_writer_output_summary(output: str, reason: str, max_chars: int
     lowered = output.lower()
     if "```file:" in lowered or "```path:" in lowered:
         lines.append("The output started a file block, but NightShift could not parse a complete closed block.")
+    elif re.search(r"(?m)^FILE:\s*[^\n]+\n---CONTENT---\n", output):
+        lines.append("The output started a delimiter file block, but NightShift could not parse a complete block.")
     else:
         lines.append("The output did not contain a parseable file block.")
     excerpt = output.strip()
@@ -1863,6 +1847,12 @@ def _resolve_retry_target_stage(stage: StageConfig, result: StageResult) -> str 
     if stage.type in {"agent_review", "review"} and _is_malformed_review_result(result):
         return None
     return (stage.on_status or {}).get(result.status) or stage.on_fail or result.next_stage
+
+
+def _parse_file_writer_updates(stage: StageConfig, stdout: str) -> tuple[FileUpdate, ...]:
+    if _is_writing_file_writer_stage(stage):
+        return parse_delimited_file_updates(stdout)
+    return parse_file_updates(stdout)
 
 
 def _previous_continuity_review_passed(previous_outputs: dict[str, str]) -> bool:
@@ -1938,10 +1928,10 @@ def _filter_allowed_file_updates(updates: tuple[FileUpdate, ...], stage: StageCo
 
 
 def _file_writer_repair_format_note(stage: StageConfig) -> str:
-    if _is_state_update_stage(stage):
+    if _is_writing_file_writer_stage(stage):
         return (
             "Use delimiter file blocks only: FILE: path, ---CONTENT---, complete file content, "
-            "---END---. Do not use markdown code fences for state update output."
+            "---END---. Do not use markdown code fences for writing output."
         )
     return "Use complete fenced file blocks with both the opening ```file:path and closing ``` fence."
 
